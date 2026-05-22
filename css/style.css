@@ -1,0 +1,697 @@
+/* ============================================================
+   style.css — INAI Extra Polish Styles
+   Most styling is in utils.js via injectBaseStyles()
+   This file adds responsive breakpoints and extra polish
+   ============================================================ */
+
+/* ── Responsive ─────────────────────────────────────────────── */
+@media (max-width: 700px) {
+  .inai-page {
+    padding: 16px 14px;
+  }
+
+  /* Dashboard stats: 2 columns on mobile */
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+
+  /* Nav and Links mobile optimization */
+  .inai-nav {
+    flex-wrap: wrap;
+    height: auto !important;
+    padding: 12px 16px !important;
+    gap: 10px;
+  }
+
+  .nav-links {
+    overflow-x: auto;
+    width: 100%;
+    justify-content: flex-start;
+    scrollbar-width: none;
+    padding-bottom: 4px;
+  }
+
+  .inai-nav-logo {
+    font-size: 20px !important;
+  }
+
+  /* Match cards full width */
+  .match-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Form grid: single column */
+  .form-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Features grid */
+  .features-grid {
+    grid-template-columns: 1fr 1fr !important;
+  }
+
+  /* Score bars */
+  .score-bars {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+
+  /* Hero */
+  .hero {
+    padding: 48px 16px 36px !important;
+  }
+
+  .hero h1 {
+    font-size: 32px !important;
+  }
+
+  /* Algorithm section */
+  .algo-section {
+    padding: 36px 16px !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .features-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .score-bars {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+
+  .hero-btns {
+    flex-direction: column;
+    align-items: center;
+  }
+}
+
+/* ── Animations ──────────────────────────────────────────────── */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+/* Skeleton loader for cards */
+.skeleton {
+  background: linear-gradient(90deg,
+      var(--indigo) 25%, #262626 50%, var(--indigo) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite;
+  border-radius: 10px;
+  height: 20px;
+}
+
+/* ── Card hover glow per color ──────────────────────────────── */
+.card-glow-cyan:hover, .card-glow-violet:hover, .card-glow-green:hover, .card-glow-gold:hover {
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5) !important;
+  border-color: #3f3f46 !important;
+}
+
+/* ── Free Now pulse animation ───────────────────────────────── */
+.free-dot {
+  animation: pulse-green 2s infinite;
+}
+
+@keyframes pulse-green {
+
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4);
+  }
+
+  50% {
+    box-shadow: 0 0 0 5px rgba(34, 197, 94, 0);
+  }
+}
+
+/* ── Tab underline variant ──────────────────────────────────── */
+.tab-underline {
+  background: transparent !important;
+  border-radius: 0 !important;
+  border-bottom: 2px solid transparent;
+  padding-bottom: 10px !important;
+}
+
+.tab-underline.active {
+  background: transparent !important;
+  box-shadow: none !important;
+  border-bottom-color: var(--offwht) !important;
+  color: var(--offwht) !important;
+}
+
+/* ── Score ring smooth animation ───────────────────────────── */
+.score-ring-wrap {
+  transition: transform 0.3s;
+}
+
+.score-ring-wrap:hover {
+  transform: scale(1.08);
+}
+
+/* ── Input focus glow ────────────────────────────────────────── */
+.inai-input:focus,
+.inai-select:focus {
+  border-color: var(--violet) !important;
+  box-shadow: 0 0 0 1px var(--violet) !important;
+  background-color: #111111 !important;
+}
+
+/* ── Button press effect ────────────────────────────────────── */
+.inai-btn:active {
+  transform: scale(0.97) !important;
+}
+
+/* ── Custom scrollbar (webkit) ──────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--dark);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+  transition: background 0.2s;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--violet);
+}
+
+/* ── Selection color ────────────────────────────────────────── */
+::selection {
+  background: rgba(255, 255, 255, 0.15);
+  color: var(--white);
+}
+
+/* ── Specific Mobile Fixes ── */
+@media (max-width: 850px) {
+
+  /* register.html layout fixes */
+  .main-wrap {
+    flex-direction: column !important;
+    padding: 24px 16px !important;
+    gap: 24px !important;
+  }
+
+  .left-panel {
+    flex: none !important;
+    width: 100% !important;
+    text-align: center;
+    padding-top: 0 !important;
+  }
+
+  .form-card {
+    flex: none !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 24px 16px !important;
+  }
+
+  .top-nav {
+    padding: 16px !important;
+    flex-wrap: wrap;
+    gap: 12px;
+    justify-content: center !important;
+  }
+
+  .tamil-badge,
+  .feature-pill {
+    text-align: left;
+  }
+
+  /* index.html fixes */
+  nav {
+    padding: 0 16px !important;
+    flex-wrap: wrap !important;
+    height: auto !important;
+    padding-top: 12px !important;
+    padding-bottom: 12px !important;
+    gap: 10px;
+    justify-content: center !important;
+  }
+}
+
+@media (max-width: 640px) {
+  .stats-grid { grid-template-columns: repeat(2, 1fr); }
+  .inai-tabs  { flex-direction: column; }
+  .inai-page  { padding: 12px; }
+  .form-grid  { grid-template-columns: 1fr; }
+}
+
+/* ============================================================
+   Responsive stability layer
+   Keeps the app usable from small phones to desktop screens.
+   ============================================================ */
+
+html {
+  overflow-x: hidden;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  overflow-x: hidden;
+}
+
+button,
+input,
+select,
+textarea,
+a {
+  max-width: 100%;
+}
+
+input,
+select,
+textarea {
+  font-size: 16px;
+}
+
+.inai-card,
+.feat-card,
+.form-card,
+.glass-app-preview,
+.stat-card,
+.match-card-top,
+.request-card {
+  min-width: 0;
+}
+
+.match-card-actions,
+.request-card-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+@media (max-width: 850px) {
+  body {
+    background-attachment: scroll !important;
+  }
+
+  .inai-page {
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 16px 12px !important;
+  }
+
+  .inai-nav {
+    align-items: stretch !important;
+    border-radius: 18px !important;
+    flex-wrap: wrap !important;
+    height: auto !important;
+    margin: 10px 12px 20px !important;
+    padding: 12px !important;
+    position: static !important;
+    top: auto !important;
+    gap: 12px !important;
+    width: auto !important;
+  }
+
+  .inai-nav > div:first-child {
+    width: 100%;
+    text-align: center;
+  }
+
+  .inai-nav > div:last-child {
+    width: 100%;
+    display: flex !important;
+    justify-content: center !important;
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+  }
+
+  .nav-links {
+    order: 3;
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px !important;
+    overflow-x: visible;
+    width: 100% !important;
+    justify-content: stretch !important;
+    scrollbar-width: none;
+    padding-bottom: 0;
+  }
+
+  .nav-links a {
+    text-align: center;
+    width: 100%;
+    padding: 9px 8px !important;
+    background: rgba(255, 255, 255, 0.03);
+  }
+
+  .inai-nav-logo {
+    font-size: 20px !important;
+    width: 100%;
+  }
+
+  nav {
+    border-radius: 18px !important;
+    margin: 10px 12px !important;
+    padding: 12px !important;
+    width: auto !important;
+  }
+
+  nav .nav-actions {
+    width: 100%;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  .main-wrap {
+    flex-direction: column !important;
+    padding: 20px 12px 36px !important;
+    gap: 24px !important;
+  }
+
+  .left-panel {
+    flex: none !important;
+    width: 100% !important;
+    text-align: center;
+    padding-top: 0 !important;
+  }
+
+  .form-card {
+    flex: none !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 22px 16px !important;
+  }
+
+  .top-nav {
+    padding: 16px !important;
+    flex-wrap: wrap;
+    gap: 12px;
+    justify-content: center !important;
+  }
+
+  .tamil-badge,
+  .feature-pill {
+    text-align: left;
+  }
+
+  .form-grid,
+  #pref-section .inai-card div[style*="grid-template-columns:repeat(3,1fr)"] {
+    grid-template-columns: 1fr !important;
+  }
+
+  .form-grid .full {
+    grid-column: auto !important;
+  }
+
+  .stats-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+  }
+
+  .features-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .score-bars {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .hero {
+    padding: 40px 14px 36px !important;
+  }
+
+  .hero h1 {
+    font-size: 34px !important;
+    line-height: 1.12 !important;
+  }
+
+  .hero p {
+    font-size: 15px !important;
+  }
+
+  .hero-visual {
+    margin-top: 36px !important;
+    max-width: 100% !important;
+  }
+
+  .glass-app-preview {
+    border-radius: 16px !important;
+    padding: 18px !important;
+    transform: none !important;
+  }
+
+  .preview-header {
+    align-items: flex-start !important;
+    gap: 12px !important;
+  }
+
+  .preview-score {
+    white-space: nowrap;
+  }
+
+  .algo-section {
+    padding: 36px 16px !important;
+  }
+
+  .inai-card {
+    padding: 16px !important;
+    border-radius: 12px !important;
+  }
+
+  .inai-tabs {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  .inai-tab {
+    min-height: 42px;
+    white-space: normal;
+  }
+
+  .match-card-top {
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+
+  .match-card-top > div:first-child {
+    align-self: flex-start;
+  }
+
+  .match-card-actions,
+  .request-card-actions {
+    justify-content: stretch !important;
+    width: 100% !important;
+  }
+
+  .match-card-actions .inai-btn,
+  .request-card-actions .inai-btn,
+  .request-card-actions button {
+    width: 100% !important;
+  }
+
+  .request-card {
+    align-items: flex-start !important;
+    flex-direction: column !important;
+    padding: 16px !important;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .request-card > div:nth-child(2) {
+    width: 100%;
+  }
+
+  .request-card-actions > div {
+    width: 100%;
+  }
+
+  .request-card-actions > div,
+  .request-card-actions > span {
+    display: flex !important;
+    justify-content: stretch !important;
+  }
+
+  .request-card-actions span {
+    width: 100%;
+    text-align: center;
+  }
+
+  .strong-skill-row {
+    flex-wrap: wrap !important;
+  }
+
+  .strong-skill-row input,
+  .strong-skill-row select {
+    flex: 1 1 160px !important;
+  }
+
+  .strong-skill-row button {
+    flex: 0 0 44px !important;
+    min-height: 44px;
+  }
+
+  .admin-table-container {
+    overflow-x: auto !important;
+  }
+
+  .admin-table {
+    min-width: 720px;
+  }
+
+  .dashboard-welcome {
+    align-items: flex-start !important;
+    flex-direction: column !important;
+  }
+
+  .dashboard-welcome > div {
+    width: 100%;
+  }
+
+  .dashboard-welcome > div:nth-child(2),
+  .dashboard-welcome > div:nth-child(3) {
+    justify-content: flex-start !important;
+  }
+
+  .pomodoro-card {
+    padding: 24px 16px !important;
+  }
+
+  .ttt-board {
+    width: min(100%, 320px);
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .profile-head {
+    align-items: center !important;
+    gap: 14px;
+  }
+
+  .profile-stats,
+  .profile-details-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .profile-availability-actions {
+    flex-direction: column !important;
+  }
+}
+
+@media (max-width: 520px) {
+  .inai-page {
+    padding: 12px 10px !important;
+  }
+
+  .features-grid,
+  .score-bars,
+  .stats-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .hero-btns {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .hero-btn-big {
+    width: 100%;
+    text-align: center;
+  }
+
+  .hero h1 {
+    font-size: 30px !important;
+  }
+
+  .hero-tag {
+    max-width: 100%;
+    white-space: normal;
+  }
+
+  .preview-header {
+    flex-wrap: wrap;
+  }
+
+  .preview-info {
+    min-width: 0;
+  }
+
+  .preview-score {
+    width: 100%;
+    text-align: center;
+  }
+
+  .inai-tabs {
+    flex-direction: column;
+  }
+
+  .top-nav {
+    align-items: center !important;
+    text-align: center;
+  }
+
+  .left-panel h1 {
+    font-size: 28px !important;
+  }
+
+  .feature-pill,
+  .tamil-badge {
+    width: 100%;
+  }
+
+  .submit-btn,
+  .add-skill-btn,
+  .inai-btn {
+    min-height: 44px;
+  }
+
+  .features,
+  .cta-section {
+    padding-left: 14px !important;
+    padding-right: 14px !important;
+  }
+
+  footer {
+    justify-content: center !important;
+    padding: 20px 14px !important;
+    text-align: center;
+  }
+
+  .profile-head {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+  }
+
+  .dashboard-welcome > div:nth-child(2) {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+  }
+
+  .dashboard-welcome > div:nth-child(3) {
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+
+  .dashboard-welcome > div:nth-child(3) .inai-btn,
+  .dashboard-welcome > div:nth-child(3) a {
+    width: 100% !important;
+  }
+
+  .pomo-time {
+    font-size: 48px !important;
+  }
+}

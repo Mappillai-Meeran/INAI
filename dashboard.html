@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>INAI — Dashboard</title>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700;800&family=DM+Sans:wght@400;500;600&display=swap"
+    rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+
+<body>
+  <div id="app"></div>
+
+  <script src="js/data.js"></script>
+  <script src="js/utils.js"></script>
+  <script src="js/match.js"></script>
+  <script src="js/request.js"></script>
+  <script>
+    document.addEventListener("DOMContentLoaded", async () => {
+      showLoader();
+      await initData();
+      hideLoader();
+      injectBaseStyles();
+      const user = requireLogin();
+      if (!user) return;
+
+      const pending = getIncomingRequests(user.id).filter(r => r.status === "pending").length;
+
+      document.getElementById("app").innerHTML = `
+    ${renderNav("dashboard")}
+    <div class="inai-page">
+
+      <!-- Welcome banner -->
+      <div class="inai-card dashboard-welcome" style="
+        position: relative; overflow: hidden;
+        padding:32px; margin-bottom:24px;
+        display:flex; align-items:center; justify-content:space-between;
+        flex-wrap:wrap; gap:16px;">
+        <div style="position:absolute; right:0; top:0; width:50%; height:100%; background:radial-gradient(ellipse at right, rgba(139, 92, 246, 0.15) 0%, transparent 70%); pointer-events:none;"></div>
+        <div style="display:flex; align-items:center; gap:20px; z-index:1;">
+          ${renderAvatar(user.name, 64)}
+          <div>
+            <h2 style="font-size:24px; font-weight:800; color:var(--white); font-family:'Space Grotesk',sans-serif;">
+              Welcome back, ${user.name.split(" ")[0]}!
+            </h2>
+            <p style="font-size:14px; color:var(--muted); margin-top:4px;">
+              ${user.year} · ${user.branch} · ${user.hostel}, Block ${user.block}
+            </p>
+            <div style="margin-top:8px;">${freeNowBadge(user.freeNow)}</div>
+          </div>
+        </div>
+        <div style="display:flex; gap:12px; flex-wrap:wrap; z-index:1;">
+          <button onclick="toggleFreeNow()" class="inai-btn"
+            style="background:${user.freeNow ? "rgba(16, 185, 129, 0.1)" : "rgba(255,255,255,0.05)"};
+              color:${user.freeNow ? "var(--green)" : "var(--muted)"};
+              border:1px solid ${user.freeNow ? "rgba(16,185,129,0.3)" : "var(--border)"};
+              padding:10px 20px; border-radius:10px; font-size:13px; cursor:pointer;">
+            ${user.freeNow ? "🟢 I'm Free Now" : "🔴 I'm Busy"}
+          </button>
+          <a href="match.html" class="inai-btn inai-btn-primary" style="padding:10px 20px;">
+            Find Match →
+          </a>
+        </div>
+      </div>
+      <!-- Pomodoro & Brain Break -->
+      <div class="inai-card pomodoro-card" style="margin-bottom:24px; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:32px; position:relative; overflow:hidden;">
+        <div style="position:absolute; inset:0; background:radial-gradient(circle at center, rgba(16, 185, 129, 0.05), transparent 60%); pointer-events:none;"></div>
+        
+        <!-- Timer View -->
+        <div id="pomo-timer-view" style="text-align:center; z-index:1;">
+          <h3 style="font-size:14px; font-weight:700; color:var(--cyan); font-family:'Space Grotesk',sans-serif; text-transform:uppercase; letter-spacing:1px; margin-bottom:8px;">Focus Session</h3>
+          <div id="pomo-time" class="pomo-time" style="font-size:64px; font-weight:800; color:var(--white); font-family:'Space Grotesk',sans-serif; line-height:1; margin-bottom:16px;">25:00</div>
+          <p id="pomo-status" style="font-size:13px; color:var(--muted); margin-bottom:24px;">Ready to study? Start a 25-minute focus timer.</p>
+          
+          <div style="display:flex; gap:12px; justify-content:center; flex-wrap:wrap;">
+            <button id="pomo-start-btn" onclick="startPomodoro()" class="inai-btn" style="background:var(--green); color:#fff; border:none; padding:12px 32px; font-size:14px; font-weight:700; border-radius:12px; cursor:pointer;">Start Focus</button>
+            <button id="pomo-reset-btn" onclick="resetPomodoro()" class="inai-btn inai-btn-outline" style="padding:12px 24px; display:none;">Reset</button>
+          </div>
+          <button onclick="timeRemaining=3" style="font-size:11px; color:var(--muted); background:transparent; border:none; cursor:pointer; margin-top:16px; text-decoration:underline;">[Viva Cheat: Skip to Break]</button>
+        </div>
+
+        <!-- Game View (Hidden by default) -->
+        <div id="pomo-game-view" style="display:none; text-align:center; z-index:1; width:100%; max-width:400px;">
+          <h3 style="font-size:18px; font-weight:800; color:var(--gold); font-family:'Space Grotesk',sans-serif; margin-bottom:8px;">Brain Break 🎮</h3>
+          <p id="pomo-break-timer" style="font-size:14px; font-weight:700; color:var(--white); margin-bottom:4px;">05:00</p>
+          <p style="font-size:13px; color:var(--muted); margin-bottom:24px;">You earned a 5-minute break! Play a quick game of Tic-Tac-Toe.</p>
+          
+          <!-- Tic Tac Toe Board -->
+          <div class="ttt-board" style="display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:24px; background:rgba(255,255,255,0.02); padding:12px; border-radius:16px; border:1px solid var(--border);">
+            ${[0,1,2,3,4,5,6,7,8].map(i => `<div id="ttt-cell-${i}" onclick="makeMove(${i})" style="aspect-ratio:1; background:rgba(0,0,0,0.3); border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:42px; font-family:'Space Grotesk',sans-serif; font-weight:800; cursor:pointer; transition:background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background='rgba(0,0,0,0.3)'"></div>`).join("")}
+          </div>
+
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <p id="ttt-status" style="font-size:14px; font-weight:700; color:var(--cyan);">Your turn (X)</p>
+            <button onclick="resetGame()" class="inai-btn inai-btn-outline" style="padding:8px 16px; font-size:12px;">Restart Game</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Stats row -->
+      <div class="stats-grid" style="display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:24px;">
+        ${statCard("Total Students", getAllUsers().length, "#00C9E4")}
+        ${statCard("Free Now", getAllUsers().filter(u => u.freeNow && u.id !== user.id).length, "#22C55E")}
+        ${statCard("Pending Requests", pending, "#F5C542")}
+        ${statCard("Connections", getAllRequests().filter(r =>
+        r.status === "accepted" && (r.from === user.id || r.to === user.id)).length, "#6C3FC7")}
+      </div>
+
+      <!-- Tabs -->
+      <div class="inai-tabs">
+        <button class="inai-tab active" id="tab-study" onclick="switchDashTab('study')">
+          🧠 Study Buddies
+        </button>
+        <button class="inai-tab" id="tab-roommate" onclick="switchDashTab('roommate')">
+          🏠 Roommate Finder
+        </button>
+        <button class="inai-tab" id="tab-connections" onclick="switchDashTab('connections')">
+          🤝 My Connections
+        </button>
+      </div>
+
+      <!-- Study Buddies tab -->
+      <div id="tab-study-content">
+        <div style="display:flex; align-items:center; justify-content:space-between;
+          flex-wrap:wrap; gap:12px; margin-bottom:16px;">
+          <div>
+            <h3 class="inai-section-title">Top Study Matches</h3>
+            <p class="inai-section-sub">Based on your skills and location</p>
+          </div>
+          <a href="match.html" class="inai-btn inai-btn-cyan" style="padding:8px 18px; font-size:13px;">
+            See All Matches →
+          </a>
+        </div>
+        <div id="study-matches-list" style="display:flex; flex-direction:column; gap:14px;"></div>
+      </div>
+
+      <!-- Roommate tab -->
+      <div id="tab-roommate-content" style="display:none;">
+        <div style="margin-bottom:16px;">
+          <h3 class="inai-section-title">Compatible Roommates</h3>
+          <p class="inai-section-sub">Matched by lifestyle and proximity</p>
+        </div>
+        <div id="roommate-matches-list" style="display:flex; flex-direction:column; gap:14px;"></div>
+      </div>
+
+      <!-- Connections tab -->
+      <div id="tab-connections-content" style="display:none;">
+        <div style="margin-bottom:16px;">
+          <h3 class="inai-section-title">My Connections</h3>
+          <p class="inai-section-sub">People you are connected with</p>
+        </div>
+        <div id="connections-list" style="display:flex; flex-direction:column; gap:14px;"></div>
+      </div>
+
+    </div>`;
+
+      document.getElementById("study-matches-list").innerHTML = renderSkeleton();
+      document.getElementById("roommate-matches-list").innerHTML = renderSkeleton();
+      document.getElementById("connections-list").innerHTML = renderSkeleton();
+
+      setTimeout(() => {
+        loadStudyMatches(user);
+        loadRoommateMatches(user);
+        loadConnections(user);
+      }, 600);
+    });
+
+    function renderSkeleton() {
+      return Array(3).fill(0).map(() => `
+    <div style="background:var(--indigo); border:1px solid var(--border); border-radius:16px; padding:20px; display:flex; gap:14px; align-items:center;">
+      <div class="skeleton" style="width:48px; height:48px; border-radius:50%; flex-shrink:0;"></div>
+      <div style="flex:1;">
+        <div class="skeleton" style="width:120px; height:14px; margin-bottom:8px;"></div>
+        <div class="skeleton" style="width:200px; height:12px;"></div>
+      </div>
+      <div class="skeleton" style="width:80px; height:36px; border-radius:10px;"></div>
+    </div>
+  `).join("");
+    }
+
+    function statCard(label, value, color) {
+      return `
+    <div class="inai-card" style="padding:20px; position:relative; overflow:hidden;">
+      <div style="position:absolute; right:-20px; top:-20px; opacity:0.05;">
+        <svg width="100" height="100" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2">
+           <circle cx="12" cy="12" r="10" />
+           <polyline points="12 6 12 12 16 14"></polyline>
+        </svg>
+      </div>
+      <p style="font-size:32px; font-weight:800; color:${color}; font-family:'Space Grotesk',sans-serif; line-height:1;">${value}</p>
+      <p style="font-size:13px; font-weight:600; color:var(--muted); margin-top:8px;">${label}</p>
+    </div>`;
+    }
+
+    function switchDashTab(tab) {
+      ["study", "roommate", "connections"].forEach(t => {
+        document.getElementById(`tab-${t}-content`).style.display = t === tab ? "block" : "none";
+        document.getElementById(`tab-${t}`).classList.toggle("active", t === tab);
+      });
+    }
+
+    function loadStudyMatches(user) {
+      const matches = getPreferenceMatches(user).slice(0, 4);
+      const container = document.getElementById("study-matches-list");
+      if (matches.length === 0) {
+        container.innerHTML = `<div class="inai-empty" style="text-align:center; padding:40px 20px;">
+      <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:16px;">
+        <circle cx="11" cy="11" r="8"></circle>
+        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        <path d="M11 8v6"></path>
+        <path d="M8 11h6"></path>
+      </svg>
+      <p style="color:var(--muted); font-size:14px;">No matches found yet. More students will join soon!</p></div>`;
+        return;
+      }
+      container.innerHTML = matches.map(m => renderMatchCard(m, user, "preference")).join("");
+    }
+
+    function loadRoommateMatches(user) {
+      const matches = getRoommateMatches(user).slice(0, 4);
+      const container = document.getElementById("roommate-matches-list");
+      if (matches.length === 0) {
+        container.innerHTML = `<div class="inai-empty" style="text-align:center; padding:40px 20px;">
+      <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:16px;">
+        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+        <polyline points="9 22 9 12 15 12 15 22"></polyline>
+      </svg>
+      <p style="color:var(--muted); font-size:14px;">No roommate matches found yet.</p></div>`;
+        return;
+      }
+      container.innerHTML = matches.map(m => renderMatchCard(m, user, "roommate")).join("");
+    }
+
+    function loadConnections(user) {
+      const connected = getAllRequests()
+        .filter(r => r.status === "accepted" &&
+          (r.from === user.id || r.to === user.id));
+      const container = document.getElementById("connections-list");
+      if (connected.length === 0) {
+        container.innerHTML = `<div class="inai-empty" style="text-align:center; padding:40px 20px;">
+      <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="var(--violet)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:16px;">
+        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+        <circle cx="9" cy="7" r="4"></circle>
+        <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+        <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+      </svg>
+      <p style="color:var(--muted); font-size:14px;">No connections yet. Send your first request!</p></div>`;
+        return;
+      }
+      container.innerHTML = connected.map(req => {
+        const otherId = req.from === user.id ? req.to : req.from;
+        const other = getUserById(otherId);
+        if (!other) return "";
+        return `<div class="inai-card" style="display:flex;align-items:center;gap:14px;">
+      ${renderAvatar(other.name, 44)}
+      <div style="flex:1;">
+        <h4 style="font-size:14px;font-weight:700;color:var(--white);
+          font-family:'Space Grotesk',sans-serif;">${other.name}</h4>
+        <p style="font-size:12px;color:var(--muted);">${other.year} · ${other.branch}</p>
+        <p style="font-size:12px;color:var(--green);margin-top:3px;">
+          🔓 Room ${other.room}, Block ${other.block}
+        </p>
+      </div>
+      <div style="display:flex; align-items:center; gap:8px;">
+        <span style="color:var(--green);font-size:12px;font-weight:700;
+          background:#14532d;border:1px solid #22C55E;
+          padding:6px 14px;border-radius:8px;">✓ Connected</span>
+        <button onclick="disconnectUser('${req.id}')" style="background:transparent; border:1px solid var(--red); color:var(--red); padding:6px 10px; border-radius:8px; font-size:11px; font-weight:700; cursor:pointer;">Remove</button>
+      </div>
+    </div>`;
+      }).join("");
+    }
+
+    function toggleFreeNow() {
+      const user = getSession();
+      const updated = !user.freeNow;
+      updateUser(user.id, { freeNow: updated });
+      showToast(updated ? "You are now visible as Free!" : "Status set to Busy", "success");
+      setTimeout(() => window.location.reload(), 600);
+    }
+
+    // --- POMODORO & GAME LOGIC ---
+    let pomoInterval;
+    let timeRemaining = 25 * 60; // 25 mins
+    let isBreak = false;
+
+    function startPomodoro() {
+      document.getElementById('pomo-start-btn').style.display = 'none';
+      document.getElementById('pomo-reset-btn').style.display = 'block';
+      document.getElementById('pomo-status').textContent = "Stay focused! You got this.";
+      
+      clearInterval(pomoInterval);
+      pomoInterval = setInterval(() => {
+        timeRemaining--;
+        updateTimerDisplay();
+
+        if (timeRemaining <= 0) {
+          clearInterval(pomoInterval);
+          if (!isBreak) {
+            // Enter break mode
+            isBreak = true;
+            timeRemaining = 5 * 60;
+            showToast("Focus complete! Time for a Brain Break 🎮", "success");
+            document.getElementById('pomo-timer-view').style.display = 'none';
+            document.getElementById('pomo-game-view').style.display = 'block';
+            updateBreakTimerDisplay();
+            resetGame();
+            
+            // Auto start break timer
+            pomoInterval = setInterval(() => {
+              timeRemaining--;
+              updateBreakTimerDisplay();
+              if (timeRemaining <= 0) {
+                clearInterval(pomoInterval);
+                resetPomodoro();
+                showToast("Break over! Ready to focus again?", "info");
+              }
+            }, 1000);
+          }
+        }
+      }, 1000);
+    }
+
+    function updateTimerDisplay() {
+      const m = Math.floor(timeRemaining / 60).toString().padStart(2, '0');
+      const s = (timeRemaining % 60).toString().padStart(2, '0');
+      document.getElementById('pomo-time').textContent = `${m}:${s}`;
+    }
+
+    function updateBreakTimerDisplay() {
+      const m = Math.floor(timeRemaining / 60).toString().padStart(2, '0');
+      const s = (timeRemaining % 60).toString().padStart(2, '0');
+      document.getElementById('pomo-break-timer').textContent = `Break Time Left: ${m}:${s}`;
+    }
+
+    function resetPomodoro() {
+      clearInterval(pomoInterval);
+      isBreak = false;
+      timeRemaining = 25 * 60;
+      updateTimerDisplay();
+      document.getElementById('pomo-start-btn').style.display = 'block';
+      document.getElementById('pomo-reset-btn').style.display = 'none';
+      document.getElementById('pomo-status').textContent = "Ready to study? Start a 25-minute focus timer.";
+      document.getElementById('pomo-timer-view').style.display = 'block';
+      document.getElementById('pomo-game-view').style.display = 'none';
+    }
+
+    // --- TIC TAC TOE LOGIC ---
+    let board = ["", "", "", "", "", "", "", "", ""];
+    let gameActive = true;
+
+    function makeMove(index) {
+      if (!gameActive || board[index] !== "") return;
+      
+      board[index] = "X";
+      updateBoard();
+      checkWin();
+
+      if (gameActive) {
+        setTimeout(aiMove, 400); // AI delay
+      }
+    }
+
+    function aiMove() {
+      const emptyIndices = board.map((val, idx) => val === "" ? idx : null).filter(val => val !== null);
+      if (emptyIndices.length === 0) return;
+      
+      const randomIdx = emptyIndices[Math.floor(Math.random() * emptyIndices.length)];
+      board[randomIdx] = "O";
+      updateBoard();
+      checkWin();
+    }
+
+    function updateBoard() {
+      board.forEach((val, idx) => {
+        const cell = document.getElementById(`ttt-cell-${idx}`);
+        cell.textContent = val;
+        if (val === "X") cell.style.color = "var(--cyan)";
+        if (val === "O") cell.style.color = "var(--gold)";
+      });
+    }
+
+    function checkWin() {
+      const winConditions = [
+        [0,1,2], [3,4,5], [6,7,8], // rows
+        [0,3,6], [1,4,7], [2,5,8], // cols
+        [0,4,8], [2,4,6]           // diagonals
+      ];
+
+      for (let i = 0; i < winConditions.length; i++) {
+        const [a, b, c] = winConditions[i];
+        if (board[a] && board[a] === board[b] && board[a] === board[c]) {
+          document.getElementById('ttt-status').textContent = `${board[a] === "X" ? "You Win!" : "AI Wins!"} 🎉`;
+          gameActive = false;
+          return;
+        }
+      }
+
+      if (!board.includes("")) {
+        document.getElementById('ttt-status').textContent = "It's a Draw! 🤝";
+        gameActive = false;
+      } else {
+        document.getElementById('ttt-status').textContent = "Your turn (X)";
+      }
+    }
+
+    function resetGame() {
+      board = ["", "", "", "", "", "", "", "", ""];
+      gameActive = true;
+      document.getElementById('ttt-status').textContent = "Your turn (X)";
+      updateBoard();
+    }
+  </script>
+</body>
+
+</html>

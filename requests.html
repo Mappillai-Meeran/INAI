@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>INAI — Requests</title>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700;800&family=DM+Sans:wght@400;500;600&display=swap"
+    rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+
+<body>
+  <div id="app"></div>
+
+  <script src="js/data.js"></script>
+  <script src="js/utils.js"></script>
+  <script src="js/match.js"></script>
+  <script src="js/request.js"></script>
+  <script>
+    document.addEventListener("DOMContentLoaded", async () => {
+      showLoader();
+      await initData();
+      hideLoader();
+      injectBaseStyles();
+      const user = requireLogin();
+      if (!user) return;
+
+      const incoming = getIncomingRequests(user.id);
+      const outgoing = getOutgoingRequests(user.id);
+      const pending = incoming.filter(r => r.status === "pending").length;
+
+      document.getElementById("app").innerHTML = `
+    ${renderNav("requests")}
+    <div class="inai-page">
+
+      <div style="margin-bottom:20px;">
+        <h2 class="inai-section-title" style="font-size:24px;">Requests</h2>
+        <p class="inai-section-sub">Manage your study and roommate connection requests</p>
+      </div>
+
+      <!-- Tabs -->
+      <div class="inai-tabs">
+        <button class="inai-tab active" id="tab-incoming" onclick="switchReqTab('incoming')">
+          📥 Incoming
+          ${pending > 0 ? `<span style="background:var(--red);color:#fff;
+            border-radius:50%;width:18px;height:18px;font-size:10px;
+            display:inline-flex;align-items:center;justify-content:center;
+            margin-left:6px;">${pending}</span>` : ""}
+        </button>
+        <button class="inai-tab" id="tab-outgoing" onclick="switchReqTab('outgoing')">
+          📤 Sent (${outgoing.length})
+        </button>
+      </div>
+
+      <!-- Incoming -->
+      <div id="incoming-section">
+        ${pending > 0 ? `
+          <h3 style="font-size:14px;font-weight:700;color:var(--gold);
+            font-family:'Space Grotesk',sans-serif;
+            margin-bottom:12px;">⏳ Pending (${pending})</h3>
+          <div id="incoming-pending" style="display:flex;flex-direction:column;gap:12px;margin-bottom:20px;"></div>
+          <div class="inai-divider"></div>
+        ` : ""}
+
+        <h3 style="font-size:14px;font-weight:700;color:var(--green);
+          font-family:'Space Grotesk',sans-serif;
+          margin-bottom:12px;margin-top:16px;">✓ Accepted</h3>
+        <div id="incoming-accepted" style="display:flex;flex-direction:column;gap:12px;"></div>
+      </div>
+
+      <!-- Outgoing -->
+      <div id="outgoing-section" style="display:none;">
+        <div id="outgoing-list" style="display:flex;flex-direction:column;gap:12px;"></div>
+      </div>
+
+    </div>`;
+
+      renderRequestsPage();
+    });
+
+    function switchReqTab(tab) {
+      document.getElementById("incoming-section").style.display = tab === "incoming" ? "block" : "none";
+      document.getElementById("outgoing-section").style.display = tab === "outgoing" ? "block" : "none";
+      document.getElementById("tab-incoming").classList.toggle("active", tab === "incoming");
+      document.getElementById("tab-outgoing").classList.toggle("active", tab === "outgoing");
+    }
+  </script>
+</body>
+
+</html>

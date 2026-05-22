@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>INAI — Find Match</title>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700;800&family=DM+Sans:wght@400;500;600&display=swap"
+    rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+  <style>
+    .radar-wrapper {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      padding: 60px 20px; text-align: center;
+    }
+    .radar-container {
+      position: relative; width: 100px; height: 100px; margin-bottom: 24px;
+      border-radius: 50%; border: 1px solid rgba(6, 182, 212, 0.3);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .radar-container::before {
+      content: ''; position: absolute; inset: 0; border-radius: 50%;
+      border: 1px solid rgba(6, 182, 212, 0.1); transform: scale(1.5);
+    }
+    .radar-container::after {
+      content: ''; position: absolute; inset: 0; border-radius: 50%;
+      border: 1px solid rgba(6, 182, 212, 0.05); transform: scale(2);
+    }
+    .radar-sweep {
+      position: absolute; inset: 0; border-radius: 50%;
+      background: conic-gradient(from 0deg, transparent 70%, rgba(6, 182, 212, 0.5) 100%);
+      animation: sweep 2s linear infinite;
+    }
+    @keyframes sweep { to { transform: rotate(360deg); } }
+    .radar-avatar {
+      position: relative; z-index: 1; width: 56px; height: 56px;
+      border-radius: 50%; background: var(--dark); border: 2px solid var(--cyan);
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700; color: var(--cyan); font-family: 'Space Grotesk'; font-size: 18px;
+    }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+
+  <script src="js/data.js"></script>
+  <script src="js/utils.js"></script>
+  <script src="js/match.js"></script>
+  <script src="js/request.js"></script>
+  <script>
+    // SUBJECTS_LIST removed since filter is now text input
+
+    document.addEventListener("DOMContentLoaded", async () => {
+      showLoader();
+      await initData();
+      hideLoader();
+      injectBaseStyles();
+      const user = requireLogin();
+      if (!user) return;
+
+      document.getElementById("app").innerHTML = `
+    ${renderNav("match")}
+    <div class="inai-page">
+
+      <div style="margin-bottom:20px;">
+        <h2 class="inai-section-title" style="font-size:24px;">Find Your Match</h2>
+        <p class="inai-section-sub">Choose how you want to connect</p>
+      </div>
+
+      <!-- Mode tabs -->
+      <div class="inai-tabs" style="max-width:420px;">
+        <button class="inai-tab active" id="tab-quick"
+          onclick="switchMode('quick')">⚡ Quick Match</button>
+        <button class="inai-tab" id="tab-pref"
+          onclick="switchMode('preference')">🎯 Preference Match</button>
+      </div>
+
+      <!-- Quick Match -->
+      <div id="quick-section">
+        <div class="inai-card" style="padding:24px; margin-bottom:24px; display:flex;align-items:center;gap:16px;">
+          <div style="width:48px; height:48px; border-radius:12px; background:rgba(6, 182, 212, 0.1); color:var(--cyan); display:flex; align-items:center; justify-content:center; font-size:24px;">⚡</div>
+          <div>
+            <h3 style="font-size:16px;font-weight:700;color:var(--white); font-family:'Space Grotesk',sans-serif;">Quick Match</h3>
+            <p style="font-size:13px;color:var(--muted); margin-top:2px;">
+              Nearest available students — no filters needed. Free Now students appear first.
+            </p>
+          </div>
+        </div>
+        <div id="quick-results" style="display:flex;flex-direction:column;gap:14px;"></div>
+      </div>
+
+      <!-- Preference Match -->
+      <div id="pref-section" style="display:none;">
+        <div class="inai-card" style="padding:24px; margin-bottom:24px;">
+          <div style="display:flex;align-items:center;gap:16px;margin-bottom:20px;">
+            <div style="width:48px; height:48px; border-radius:12px; background:rgba(139, 92, 246, 0.1); color:var(--violet); display:flex; align-items:center; justify-content:center; font-size:24px;">🎯</div>
+            <div>
+              <h3 style="font-size:16px;font-weight:700;color:var(--white); font-family:'Space Grotesk',sans-serif;">Preference Match</h3>
+              <p style="font-size:13px;color:var(--muted); margin-top:2px;">
+                Set filters — algorithm scores and ranks students for you.
+              </p>
+            </div>
+          </div>
+
+          <!-- Filters -->
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;flex-wrap:wrap;">
+            <div>
+              <label style="font-size:11px;color:var(--muted);font-weight:600;
+                text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:5px;">
+                Subject Needed
+              </label>
+              <input type="text" id="filter-subject" oninput="applyFilters()" placeholder="e.g. DSA"
+                style="width:100%;padding:9px 12px;background:var(--navy);
+                  border:1px solid var(--border);border-radius:8px;
+                  color:var(--offwht);font-size:12px;outline:none;" />
+            </div>
+            <div>
+              <label style="font-size:11px;color:var(--muted);font-weight:600;
+                text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:5px;">
+                Min Match %
+              </label>
+              <select id="filter-score" onchange="applyFilters()"
+                style="width:100%;padding:9px 12px;background:var(--navy);
+                  border:1px solid var(--border);border-radius:8px;
+                  color:var(--offwht);font-size:12px;outline:none;appearance:none;">
+                <option value="0">Any score</option>
+                <option value="30">30%+</option>
+                <option value="50">50%+</option>
+                <option value="70">70%+</option>
+              </select>
+            </div>
+            <div style="display:flex;flex-direction:column;justify-content:flex-end;">
+              <label style="font-size:11px;color:var(--muted);font-weight:600;
+                letter-spacing:0.5px;display:flex;align-items:center;gap:8px;
+                cursor:pointer;margin-bottom:5px;">
+                <input type="checkbox" id="filter-free" onchange="applyFilters()"
+                  style="accent-color:var(--violet);width:14px;height:14px;">
+                Free Now only
+              </label>
+              <label style="font-size:11px;color:var(--muted);font-weight:600;
+                letter-spacing:0.5px;display:flex;align-items:center;gap:8px;
+                cursor:pointer;">
+                <input type="checkbox" id="filter-block" onchange="applyFilters()"
+                  style="accent-color:var(--violet);width:14px;height:14px;">
+                Same block only
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div id="pref-count" style="font-size:13px;color:var(--muted);margin-bottom:14px;"></div>
+        <div id="pref-results" style="display:flex;flex-direction:column;gap:14px;"></div>
+      </div>
+
+    </div>`;
+
+      loadQuickMatches(user);
+      loadPrefMatches(user);
+    });
+
+    let currentMode = "quick";
+
+    function switchMode(mode) {
+      currentMode = mode;
+      document.getElementById("quick-section").style.display = mode === "quick" ? "block" : "none";
+      document.getElementById("pref-section").style.display = mode === "preference" ? "block" : "none";
+      document.getElementById("tab-quick").classList.toggle("active", mode === "quick");
+      document.getElementById("tab-pref").classList.toggle("active", mode === "preference");
+    }
+
+    function renderRadar(user) {
+      return `
+        <div class="radar-wrapper">
+          <div class="radar-container">
+            <div class="radar-sweep"></div>
+            <div class="radar-avatar">${user.name.substring(0,2).toUpperCase()}</div>
+          </div>
+          <h3 style="color:var(--white); font-family:'Space Grotesk',sans-serif;">Scanning campus...</h3>
+          <p style="color:var(--muted); font-size:13px; margin-top:4px;">Finding the best matches for you</p>
+        </div>
+      `;
+    }
+
+    function loadQuickMatches(user) {
+      const container = document.getElementById("quick-results");
+      container.innerHTML = renderRadar(user);
+      
+      setTimeout(() => {
+        const matches = getQuickMatches(user);
+        if (!matches.length) {
+          container.innerHTML = `<div class="inai-empty">
+        <div class="inai-empty-icon">⚡</div>
+        <p>No students found nearby right now.</p></div>`;
+          return;
+        }
+        container.innerHTML = matches.map(m => renderMatchCard(m, user, "quick")).join("");
+      }, 1200);
+    }
+
+    function loadPrefMatches(user, filters = {}) {
+      const container = document.getElementById("pref-results");
+      const countEl = document.getElementById("pref-count");
+      container.innerHTML = renderRadar(user);
+      if (countEl) countEl.style.display = 'none';
+
+      setTimeout(() => {
+        const matches = getPreferenceMatches(user, filters);
+        if (countEl) {
+          countEl.textContent = `${matches.length} student${matches.length !== 1 ? "s" : ""} found`;
+          countEl.style.display = 'block';
+        }
+        if (!matches.length) {
+          container.innerHTML = `<div class="inai-empty">
+        <div class="inai-empty-icon">🎯</div>
+        <p>No matches for these filters. Try adjusting them.</p></div>`;
+          return;
+        }
+        container.innerHTML = matches.map(m => renderMatchCard(m, user, "preference")).join("");
+      }, 1200);
+    }
+
+    let filterTimeout;
+    function applyFilters() {
+      clearTimeout(filterTimeout);
+      filterTimeout = setTimeout(() => {
+        const user = getSession();
+        const subject = document.getElementById("filter-subject")?.value || "";
+        const minScore = parseInt(document.getElementById("filter-score")?.value || "0");
+        const freeOnly = document.getElementById("filter-free")?.checked || false;
+        const sameBlock = document.getElementById("filter-block")?.checked || false;
+        loadPrefMatches(user, { subject, minScore, freeOnly, sameBlock });
+      }, 500);
+    }
+  </script>
+</body>
+
+</html>
