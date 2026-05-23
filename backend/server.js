@@ -21,7 +21,11 @@ mongoose.connect(MONGO_URI)
   .then(() => console.log('✅ Connected to MongoDB Atlas'))
   .catch(err => console.error('❌ MongoDB Connection Error:', err));
 
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
+if (!ADMIN_PASSWORD) {
+  console.error("Missing ADMIN_PASSWORD");
+  process.exit(1);
+}
 
 function hashPassword(password) {
   const salt = crypto.randomBytes(16).toString('hex');
@@ -124,7 +128,7 @@ app.post('/api/users', async (req, res) => {
   try {
     const exists = await User.findOne({ name: req.body.name });
     if (exists) return res.status(400).json({ success: false, message: "Name already registered." });
-    
+
     const newUser = new User({
       ...req.body,
       password: hashPassword(req.body.password)
@@ -258,7 +262,7 @@ app.delete('/api/requests/user/:userId', requireAdmin, async (req, res) => {
   }
 });
 
-const PORT = 5000;
+const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on http://localhost:${PORT}`);
+  console.log(`🚀 Server running on port ${PORT}`);
 });

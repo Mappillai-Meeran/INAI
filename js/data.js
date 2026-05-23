@@ -3,7 +3,7 @@
 // Connects to the Node.js/Express Backend on localhost:5000
 // ============================================================
 
-const API_BASE = "http://localhost:5000/api";
+const API_BASE = "https://inai-58qr.onrender.com/api";
 let USERS_CACHE = [];
 let REQUESTS_CACHE = [];
 
@@ -15,7 +15,7 @@ async function initData() {
       fetch(`${API_BASE}/requests`)
     ]);
     if (!uRes.ok || !rRes.ok) throw new Error("Failed to fetch from server");
-    
+
     USERS_CACHE = await uRes.json();
     REQUESTS_CACHE = await rRes.json();
     console.log("[INAI] Data loaded from MongoDB:", USERS_CACHE.length, "users");
@@ -46,7 +46,7 @@ function isMutuallyConnected(userA, userB) {
   return REQUESTS_CACHE.some(r =>
     r.status === "accepted" &&
     ((r.from === userA && r.to === userB) ||
-     (r.from === userB && r.to === userA))
+      (r.from === userB && r.to === userA))
   );
 }
 function requestAlreadySent(fromId, toId) {
