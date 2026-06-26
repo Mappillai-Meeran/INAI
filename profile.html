@@ -9,6 +9,7 @@
     href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700;800&family=DM+Sans:wght@400;500;600&display=swap"
     rel="stylesheet" />
   <link rel="stylesheet" href="css/style.css" />
+  <link rel="icon" type="image/png" href="assets/favicon-bg-removed.png" />
 </head>
 
 <body>
@@ -21,9 +22,11 @@
   <script>
     document.addEventListener("DOMContentLoaded", async () => {
       showLoader();
-      await initData();
-      hideLoader();
-      injectBaseStyles();
+      try {
+        await initData();
+      } finally {
+        hideLoader();
+      }
       const user = requireLogin();
       if (!user) return;
       renderProfilePage(user);
@@ -47,22 +50,31 @@
             <div style="border:4px solid var(--dark); border-radius:50%; box-shadow:0 8px 16px rgba(0,0,0,0.5);">
               ${renderAvatar(user.name, 80)}
             </div>
-            <button onclick="toggleEdit()" class="inai-btn inai-btn-outline" style="padding:8px 18px;font-size:13px; margin-bottom:4px;">
-              ✏️ Edit Profile
-            </button>
+            <div style="display:flex; gap:8px;">
+              <button onclick="toggleEdit()" class="inai-btn inai-btn-outline" style="padding:8px 18px;font-size:13px; margin-bottom:4px;">
+                \u{270F}\u{FE0F} Edit Profile
+              </button>
+              <button onclick="deleteMyAccount()" class="inai-btn" style="padding:8px 18px;font-size:13px; margin-bottom:4px; border:1px solid var(--red); color:var(--red); background:transparent;">
+                \u{1F5D1}\u{FE0F} Delete Account
+              </button>
+            </div>
           </div>
           <div>
             <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px;">
-              <h2 style="font-size:24px;font-weight:800;color:var(--white); font-family:'Space Grotesk',sans-serif;">${user.name}</h2>
+              <h2 style="font-size:24px;font-weight:800;color:var(--white); font-family:'Space Grotesk',sans-serif;">${sanitize(user.name)}</h2>
               ${freeNowBadge(user.freeNow)}
             </div>
             <p style="font-size:14px;color:var(--muted);">
-              ${user.year} · ${user.branch} · ${user.hostel}
+              ${sanitize(user.year)} · ${sanitize(user.branch)} · ${sanitize(user.hostel)}
             </p>
             <p style="font-size:13px;color:var(--muted); margin-top:2px;">
-              Block ${user.block} · ${user.state}
+              Block ${sanitize(user.block)} · ${sanitize(user.state)}
             </p>
-            ${user.bio ? `<div style="margin-top:16px; padding:12px 16px; background:rgba(255,255,255,0.03); border-left:2px solid var(--violet); border-radius:0 8px 8px 0;"><p style="font-size:13px;color:var(--offwht); font-style:italic;">"${user.bio}"</p></div>` : ""}
+            <div style="margin-top:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+              <code id="profile-user-id" style="font-size:11px;color:var(--muted);background:rgba(255,255,255,0.04);padding:4px 10px;border-radius:6px;border:1px solid var(--border);">${sanitize(user.id)}</code>
+              <button onclick="copyUserId()" class="inai-btn inai-btn-outline" style="padding:4px 12px;font-size:11px;">Copy User ID</button>
+            </div>
+            ${user.bio ? `<div style="margin-top:16px; padding:12px 16px; background:rgba(255,255,255,0.03); border-left:2px solid var(--violet); border-radius:0 8px 8px 0;"><p style="font-size:13px;color:var(--offwht); font-style:italic;">"${sanitize(user.bio)}"</p></div>` : ""}
           </div>
 
           <!-- Stats -->
@@ -72,14 +84,42 @@
               <p style="font-size:12px;color:var(--muted);margin-top:4px;">Connections</p>
             </div>
             <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.05);border-radius:12px;padding:16px;text-align:center;">
-              <p style="font-size:24px;font-weight:800;color:var(--gold); font-family:'Space Grotesk',sans-serif;">${user.helpCount || 0}</p>
+              <p style="font-size:24px;font-weight:800;color:var(--gold); font-family:'Space Grotesk',sans-serif;">${user.helpCount > 0 ? user.helpCount : 0}</p>
               <p style="font-size:12px;color:var(--muted);margin-top:4px;">Sessions Helped</p>
             </div>
             <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.05);border-radius:12px;padding:16px;text-align:center;">
-              <p style="font-size:24px;font-weight:800;color:var(--green); font-family:'Space Grotesk',sans-serif;">${user.rating > 0 ? "★ " + user.rating : "—"}</p>
+              <p style="font-size:24px;font-weight:800;color:var(--green); font-family:'Space Grotesk',sans-serif;">${user.rating > 0 && user.helpCount > 0 ? "★ " + user.rating : "—"}</p>
               <p style="font-size:12px;color:var(--muted);margin-top:4px;">Rating</p>
             </div>
           </div>
+          <p style="font-size:11px;color:var(--muted);margin-top:12px;text-align:center;line-height:1.5;">
+            Earn ★ rating &amp; sessions helped by completing study sessions — mark them done on the Sessions page and rate your partner.
+          </p>
+        </div>
+      </div>
+
+      <!-- Badges -->
+      <div class="inai-card" style="margin-bottom:16px;">
+        <h3 style="font-size:14px;font-weight:700;color:var(--gold);
+          font-family:'Space Grotesk',sans-serif;margin-bottom:12px;">
+          \u{1F3C6} Badges & Achievements
+        </h3>
+        <div style="display:flex; flex-wrap:wrap; gap:6px;">
+          ${(function() {
+            const badges = typeof computeBadges === "function" ? computeBadges(user) : [];
+            return badges.length > 0
+              ? renderBadges(badges)
+              : '<span style="font-size:13px;color:var(--muted);">Complete actions to earn badges!</span>';
+          })()}
+        </div>
+        <div style="margin-top:12px; padding-top:12px; border-top:1px solid var(--border); display:flex; align-items:center; gap:8px;">
+          <span style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">
+            \u{1F525} Streak:
+          </span>
+          <span style="font-size:16px;font-weight:800;color:var(--gold);font-family:'Space Grotesk',sans-serif;">
+            ${typeof getLoginStreak === "function" ? getLoginStreak() : 0}
+          </span>
+          <span style="font-size:12px;color:var(--muted);">day${getLoginStreak() !== 1 ? "s" : ""}</span>
         </div>
       </div>
 
@@ -112,14 +152,15 @@
           Details
         </h3>
         <div class="profile-details-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-          ${detailRow("Hostel", user.hostel)}
-          ${detailRow("Block", "Block " + user.block)}
-          ${detailRow("Room", "🔒 " + user.room + " (private)")}
-          ${detailRow("Gender", user.gender)}
-          ${detailRow("Sleep", user.lifestyle?.sleepSchedule || "—")}
-          ${detailRow("Study Style", user.lifestyle?.studyStyle || "—")}
-          ${detailRow("State", user.state)}
-          ${detailRow("Language", user.language)}
+          ${detailRow("Hostel", sanitize(user.hostel))}
+          ${detailRow("Block", "Block " + sanitize(user.block))}
+          ${detailRow("Room", "\u{1F512} " + sanitize(user.room) + " (private)")}
+          ${detailRow("Gender", sanitize(user.gender))}
+          ${detailRow("Sleep", sanitize(user.lifestyle?.sleepSchedule || "—"))}
+          ${detailRow("Study Style", sanitize(user.lifestyle?.studyStyle || "—"))}
+          ${detailRow("State", sanitize(user.state))}
+          ${detailRow("Language", sanitize(user.language))}
+          ${detailRow("User ID", sanitize(user.id))}
         </div>
       </div>
 
@@ -128,24 +169,24 @@
         <div class="inai-card">
           <h3 style="font-size:14px;font-weight:700;color:var(--gold);
             font-family:'Space Grotesk',sans-serif;margin-bottom:16px;">
-            ✏️ Edit Profile
+            \u{270F}\u{FE0F} Edit Profile
           </h3>
           <div style="display:flex;flex-direction:column;gap:14px;">
             <div>
               <label class="inai-label">Bio</label>
               <input type="text" id="edit-bio" class="inai-input"
-                value="${user.bio || ""}"
+                value="${sanitize(user.bio || "")}"
                 placeholder="A short intro about yourself..."/>
             </div>
             <div>
               <label class="inai-label">Language</label>
               <input type="text" id="edit-lang" class="inai-input"
-                value="${user.language || ""}"/>
+                value="${sanitize(user.language || "")}"/>
             </div>
             <div>
               <label class="inai-label">Custom Hostel Name</label>
               <input type="text" id="edit-hostel" class="inai-input" list="hostel-list"
-                value="${user.hostel || ""}" placeholder="e.g. Bharathi Hostel"/>
+                value="${sanitize(user.hostel || "")}" placeholder="e.g. Bharathi Hostel"/>
               <datalist id="hostel-list">
                 <option value="Bharathi Hostel"></option>
                 <option value="Thiruvalluvar Hostel"></option>
@@ -155,7 +196,7 @@
             <div>
               <label class="inai-label">Block Name</label>
               <input type="text" id="edit-block" class="inai-input" list="block-list"
-                value="${user.block || ""}" placeholder="e.g. A Block"/>
+                value="${sanitize(user.block || "")}" placeholder="e.g. A Block"/>
               <datalist id="block-list">
                 <option value="A"></option>
                 <option value="B"></option>
@@ -165,7 +206,7 @@
             <div>
               <label class="inai-label">Year</label>
               <input type="text" id="edit-year" class="inai-input" list="year-list"
-                value="${user.year || ""}" placeholder="e.g. 1st Year"/>
+                value="${sanitize(user.year || "")}" placeholder="e.g. 1st Year"/>
               <datalist id="year-list">
                 <option value="1st Year"></option>
                 <option value="2nd Year"></option>
@@ -176,7 +217,7 @@
             <div>
               <label class="inai-label">Branch</label>
               <input type="text" id="edit-branch" class="inai-input" list="branch-list"
-                value="${user.branch || ""}" placeholder="e.g. CSE"/>
+                value="${sanitize(user.branch || "")}" placeholder="e.g. CSE"/>
               <datalist id="branch-list">
                 <option value="CSE"></option>
                 <option value="IT"></option>
@@ -189,7 +230,7 @@
             <div>
               <label class="inai-label">State</label>
               <input type="text" id="edit-state" class="inai-input" list="state-list"
-                value="${user.state || ""}" placeholder="e.g. Tamil Nadu"/>
+                value="${sanitize(user.state || "")}" placeholder="e.g. Tamil Nadu"/>
               <datalist id="state-list">
                 <option value="Tamil Nadu"></option>
                 <option value="Kerala"></option>
@@ -201,12 +242,12 @@
             <div>
               <label class="inai-label">Subjects I'm Strong In (comma separated)</label>
               <input type="text" id="edit-strong" class="inai-input"
-                value="${user.strongSkills ? user.strongSkills.map(s => s.subject).join(', ') : ""}" placeholder="e.g. DSA, Python"/>
+                value="${user.strongSkills ? sanitize(user.strongSkills.map(s => s.subject).join(', ')) : ""}" placeholder="e.g. DSA, Python"/>
             </div>
             <div>
               <label class="inai-label">Subjects I Need Help In (comma separated)</label>
               <input type="text" id="edit-need" class="inai-input"
-                value="${user.needHelpSkills ? user.needHelpSkills.join(', ') : ""}" placeholder="e.g. DBMS, OS"/>
+                value="${user.needHelpSkills ? sanitize(user.needHelpSkills.join(', ')) : ""}" placeholder="e.g. DBMS, OS"/>
             </div>
             <div>
               <label class="inai-label">Availability</label>
@@ -216,14 +257,14 @@
                   color:${user.freeNow ? '#22C55E' : 'var(--muted)'};
                   border:1px solid ${user.freeNow ? '#22C55E' : 'var(--border)'};
                   padding:10px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;">
-                  🟢 Free Now
+                  \u{1F7E2} Free Now
                 </button>
                 <button onclick="setFree(false)" class="inai-btn" style="
                   flex:1;background:${!user.freeNow ? '#1f1a0f' : 'var(--indigo)'};
                   color:${!user.freeNow ? 'var(--gold)' : 'var(--muted)'};
                   border:1px solid ${!user.freeNow ? 'var(--gold)' : 'var(--border)'};
                   padding:10px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;">
-                  🔴 Busy
+                  \u{1F534} Busy
                 </button>
               </div>
             </div>
@@ -231,6 +272,22 @@
               style="padding:12px;font-size:14px;">
               Save Changes
             </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Privacy notice card -->
+      <div class="inai-card" style="margin-top:24px; border:1px solid rgba(6, 182, 212, 0.3); background:rgba(6, 182, 212, 0.05); position:relative; overflow:hidden;">
+        <div style="position:absolute; top:-50px; right:-50px; width:120px; height:120px; background:radial-gradient(circle, rgba(6, 182, 212, 0.2) 0%, transparent 70%); pointer-events:none;"></div>
+        <div style="display:flex; gap:16px; align-items:flex-start;">
+          <div style="font-size:24px; color:var(--cyan); margin-top:2px;">\u{1F6E1}</div>
+          <div>
+            <h4 style="font-size:15px; font-weight:700; color:var(--cyan); font-family:'Space Grotesk',sans-serif; margin-bottom:6px;">
+              Privacy Control Center
+            </h4>
+            <p style="font-size:12.5px; color:var(--muted); line-height:1.6;">
+              Your security and privacy are our highest priorities. Your precise <strong style="color:var(--offwht);">Room Number</strong> and exact <strong style="color:var(--offwht);">Block Location</strong> will never be shared publicly or with unconnected users. They will only be visible to other students after a mutual connection request has been sent and accepted.
+            </p>
           </div>
         </div>
       </div>
@@ -254,11 +311,25 @@
       }
     }
 
-    function setFree(val) {
+    function copyUserId() {
       const user = getSession();
-      updateUser(user.id, { freeNow: val });
-      showToast(val ? "Status: Free Now" : "Status: Busy", "success");
-      setTimeout(() => window.location.reload(), 500);
+      if (!user) return;
+      navigator.clipboard.writeText(user.id).then(() => {
+        showToast("User ID copied to clipboard!", "success");
+      }).catch(() => {
+        showToast("Could not copy — select the ID manually.", "error");
+      });
+    }
+
+    async function setFree(val) {
+      const user = getSession();
+      const ok = await updateUser(user.id, { freeNow: val });
+      if (ok) {
+        showToast(val ? "Status: Free Now" : "Status: Busy", "success");
+        renderProfilePage(getSession());
+      } else {
+        showToast("Failed to update status.", "error");
+      }
     }
 
     async function saveEdits() {
@@ -272,23 +343,57 @@
       const state = document.getElementById("edit-state")?.value.trim();
       const strongStr = document.getElementById("edit-strong")?.value.trim();
       const needStr = document.getElementById("edit-need")?.value.trim();
-      
-      const strongSkills = strongStr ? strongStr.split(',').map(s => ({subject: s.trim(), level: "Good"})).filter(s => s.subject) : user.strongSkills;
+
+      if (!hostel) return showFieldError("edit-hostel", "Hostel name is required");
+      if (!block) return showFieldError("edit-block", "Block name is required");
+      if (!year) return showFieldError("edit-year", "Year is required");
+      if (!branch) return showFieldError("edit-branch", "Branch is required");
+      if (!state) return showFieldError("edit-state", "State is required");
+
+      const strongSkills = strongStr
+        ? strongStr.split(',').map(s => {
+            const subject = s.trim();
+            const existing = user.strongSkills && user.strongSkills.find(us => us.subject.toLowerCase() === subject.toLowerCase());
+            return {
+              subject,
+              level: existing ? existing.level : "Good"
+            };
+          }).filter(s => s.subject)
+        : user.strongSkills;
       const needHelpSkills = needStr ? needStr.split(',').map(s => s.trim()).filter(s => s) : user.needHelpSkills;
 
-      await updateUser(user.id, { 
+      const ok = await updateUser(user.id, { 
         bio, 
         language: lang,
-        hostel: hostel || user.hostel,
-        block: block || user.block,
-        year: year || user.year,
-        branch: branch || user.branch,
-        state: state || user.state,
+        hostel,
+        block,
+        year,
+        branch,
+        state,
         strongSkills,
         needHelpSkills
       });
-      showToast("Profile updated!", "success");
-      setTimeout(() => window.location.reload(), 600);
+      if (ok) {
+        showToast("Profile updated!", "success");
+        renderProfilePage(getSession());
+      } else {
+        showToast("Failed to update profile.", "error");
+      }
+    }
+
+    function deleteMyAccount() {
+      const user = getSession();
+      if (!user) return;
+      showConfirm("Are you sure you want to permanently delete your account? This will remove all your data and connections, and cannot be undone.", async () => {
+        const ok = await deleteUserAPI(user.id);
+        if (ok) {
+          clearSession();
+          showToast("Account deleted successfully.", "success");
+          setTimeout(() => window.location.href = "index.html", 800);
+        } else {
+          showToast("Failed to delete account.", "error");
+        }
+      });
     }
   </script>
 </body>

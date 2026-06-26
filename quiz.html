@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>INAI — Brain Match</title>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700;800&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+  <link rel="icon" type="image/png" href="assets/favicon-bg-removed.png" />
+</head>
+<body>
+  <div id="app"></div>
+
+  <script src="js/data.js"></script>
+  <script src="js/utils.js"></script>
+  <script>
+    const QUIZ_QUESTIONS = [
+      {
+        q: "What's your ideal study time?",
+        options: ["Early morning (5-8 AM)", "Morning (9 AM-12 PM)", "Afternoon (1-5 PM)", "Late night (10 PM-2 AM)"]
+      },
+      {
+        q: "Which study environment do you prefer?",
+        options: ["Complete silence / Library", "Soft background music / Cafe", "Group study / Discussion", "Outdoors / Natural light"]
+      },
+      {
+        q: "How do you handle study breaks?",
+        options: ["Pomodoro (25 min work, 5 min break)", "Long blocks (2+ hours, then long break)", "Take breaks as needed", "Study with meal breaks"]
+      },
+      {
+        q: "Your learning style is mostly:",
+        options: ["Reading / Visual notes", "Listening / Audio lectures", "Hands-on / Practice problems", "Teaching others / Discussion"]
+      },
+      {
+        q: "What's your approach to exams?",
+        options: ["Plan ahead — start weeks early", "Steady pace — review daily", "Cram a few days before", "Last-minute night before"]
+      }
+    ];
+
+    document.addEventListener("DOMContentLoaded", async () => {
+      showLoader();
+      try { await initData(); } finally { hideLoader(); }
+      const user = requireLogin();
+      if (!user) return;
+      renderQuizPage(user);
+    });
+
+    function renderQuizPage(user) {
+      const hasQuiz = Array.isArray(user.quizAnswers) && user.quizAnswers.length === 5;
+      document.getElementById("app").innerHTML = `
+    ${renderNav("quiz")}
+    <div class="inai-page" style="max-width:800px;">
+
+      <div style="margin-bottom:20px;">
+        <h2 class="inai-section-title" style="font-size:24px;">\u{1F9E0} Brain Match</h2>
+        <p class="inai-section-sub">Answer 5 quick questions to find study partners who match your style.</p>
+      </div>
+
+      <div id="quiz-content">
+        ${!hasQuiz ? renderQuizForm(user) : renderQuizResults(user)}
+      </div>
+    </div>`;
+    }
+
+    function renderQuizForm(user) {
+      return `<div class="inai-card">
+        <h3 style="font-size:15px;font-weight:700;color:var(--white);font-family:'Space Grotesk',sans-serif;margin-bottom:16px;">Tell us about your study habits</h3>
+        ${QUIZ_QUESTIONS.map((qq, i) => `
+          <div style="margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--border);">
+            <p style="font-size:13px;font-weight:600;color:var(--offwht);margin-bottom:10px;">${i + 1}. ${qq.q}</p>
+            <div style="display:flex;flex-direction:column;gap:8px;">
+              ${qq.options.map((opt, oi) => `
+                <label style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:8px;cursor:pointer;font-size:13px;color:var(--muted);transition:all 0.15s;" onmouseover="this.style.borderColor='var(--cyan)'" onmouseout="this.style.borderColor='var(--border)'">
+                  <input type="radio" name="quiz_${i}" value="${oi}" style="accent-color:var(--cyan);" />
+                  ${opt}
+                </label>
+              `).join("")}
+            </div>
+          </div>
+        `).join("")}
+        <button onclick="submitQuiz()" class="inai-btn inai-btn-primary" style="width:100%;padding:14px;font-size:14px;font-weight:700;">
+          Find My Brain Matches
+        </button>
+      </div>`;
+    }
+
+    async function submitQuiz() {
+      const answers = [];
+      for (let i = 0; i < 5; i++) {
+        const selected = document.querySelector(`input[name="quiz_${i}"]:checked`);
+        if (!selected) return showToast(`Please answer question ${i + 1}.`, "error");
+        answers.push(parseInt(selected.value));
+      }
+      const result = await saveQuizAnswers(answers);
+      if (result.success) {
+        showToast("Quiz saved!", "success");
+        // Update user in session
+        const user = getSession();
+        user.quizAnswers = answers;
+        setSession(user);
+        if (typeof burstConfetti === "function") burstConfetti();
+        renderQuizPage(user);
+      } else {
+        showToast(result.message || "Failed to save quiz.", "error");
+      }
+    }
+
+    async function renderQuizResults(user) {
+      const container = document.getElementById("quiz-content");
+      container.innerHTML = `<div style="text-align:center;padding:40px;color:var(--muted);">Finding your brain matches...</div>`;
+      const matches = await fetchQuizMatches();
+      const topMatches = matches.filter(m => m.score >= 40).slice(0, 10);
+
+      let html = `<div class="inai-card" style="margin-bottom:20px;">
+        <h3 style="font-size:15px;font-weight:700;color:var(--white);font-family:'Space Grotesk',sans-serif;margin-bottom:8px;">\u{1F3AF} Your Quiz Results</h3>
+        <p style="font-size:12px;color:var(--muted);">You answered all 5 questions. Your top brain matches are shown below.</p>
+        <button onclick="retakeQuiz()" class="inai-btn" style="margin-top:12px;background:transparent;border:1px solid var(--border);color:var(--muted);padding:8px 16px;font-size:12px;border-radius:8px;cursor:pointer;">Retake Quiz</button>
+      </div>`;
+
+      if (topMatches.length === 0) {
+        html += `<div class="inai-empty" style="text-align:center;padding:48px 20px;">
+          <div class="inai-empty-icon">\u{1F9E0}</div>
+          <p style="color:var(--muted);">No strong brain matches yet. Invite friends to take the quiz!</p>
+        </div>`;
+      } else {
+        html += `<div style="display:flex;flex-direction:column;gap:12px;">`;
+        topMatches.forEach((m, i) => {
+          const displayName = m.isConnected && m.name ? m.name : `Brain Match #${i + 1}`;
+          const displayDetail = m.isConnected && m.hostel
+            ? `${m.branch || "—"} · ${m.hostel}`
+            : `${m.branch || "—"} · Connect to reveal identity`;
+          const initial = m.isConnected && m.name ? m.name.charAt(0).toUpperCase() : "?";
+          const bars = [1, 2, 3, 4, 5].map(n => {
+            const filled = n <= Math.round(m.score / 20);
+            return `<span style="width:100%;height:6px;border-radius:3px;background:${filled ? 'var(--violet)' : 'var(--border)'};"></span>`;
+          }).join("");
+          html += `<div class="inai-card" style="display:flex;align-items:center;gap:16px;padding:16px;">
+            <div style="width:40px;height:40px;border-radius:50%;background:rgba(99,102,241,0.15);color:var(--violet);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:16px;flex-shrink:0;">${sanitize(initial)}</div>
+            <div style="flex:1;">
+              <p style="font-size:14px;font-weight:700;color:var(--white);">${sanitize(displayName)}</p>
+              <p style="font-size:11px;color:var(--muted);">${sanitize(displayDetail)}</p>
+              ${m.isConnected ? `<p style="font-size:10px;color:var(--muted);margin-top:2px;">ID: ${sanitize(m.userId)}</p>` : ""}
+              <div style="display:flex;gap:4px;margin-top:4px;max-width:120px;">${bars}</div>
+            </div>
+            <div style="font-size:20px;font-weight:800;color:var(--violet);font-family:'Space Grotesk',sans-serif;">${m.score}%</div>
+          </div>`;
+        });
+        html += `</div>`;
+      }
+      container.innerHTML = html;
+    }
+
+    async function retakeQuiz() {
+      const result = await clearQuizAnswers();
+      if (!result.success) {
+        showToast(result.message || "Failed to reset quiz.", "error");
+        return;
+      }
+      const user = getSession();
+      user.quizAnswers = [];
+      setSession(user);
+      const idx = USERS_CACHE.findIndex(u => u.id === user.id);
+      if (idx !== -1) USERS_CACHE[idx].quizAnswers = [];
+      document.getElementById("quiz-content").innerHTML = renderQuizForm(user);
+      showToast("Quiz reset — answer again to find new matches.", "info");
+    }
+  </script>
+</body>
+</html>

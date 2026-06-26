@@ -3,11 +3,27 @@
 // Used by every other JS file in the project.
 // ============================================================
 
+// ── XSS Sanitization Utility ──────────────────────────────────
+function sanitize(str) {
+  if (typeof str !== "string") return str;
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
 // ── Guard: redirect to login if not logged in ─────────────────
 function requireLogin() {
+  const expired = sessionStorage.getItem("inai_session_expired");
+  if (expired) {
+    sessionStorage.removeItem("inai_session_expired");
+    sessionStorage.setItem("inai_show_expired_toast", "1");
+  }
   const user = getSession();
   if (!user) {
-    window.location.href = "register.html";
+    window.location.href = "register.html?tab=login";
     return null;
   }
   return user;
@@ -23,7 +39,7 @@ function requireGuest() {
 
 // ── Generate a unique ID ──────────────────────────────────────
 function generateId(prefix = "id") {
-  return prefix + "_" + Date.now() + "_" + Math.random().toString(36).substr(2, 5);
+  return prefix + "_" + crypto.randomUUID();
 }
 
 // ── Get avatar background color based on name ────────────────
@@ -36,7 +52,7 @@ function getAvatarColor(name) {
   for (let i = 0; i < name.length; i++) {
     hash = name.charCodeAt(i) + ((hash << 5) - hash);
   }
-  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+  return AVATAR_COLORS[(hash >>> 0) % AVATAR_COLORS.length];
 }
 
 // ── Get initials from name ────────────────────────────────────
@@ -58,7 +74,27 @@ function renderAvatar(name, size = 44) {
       font-weight:700; color:#fff;
       flex-shrink:0;
       font-family:'Space Grotesk', sans-serif;
-    ">${initials}</div>
+    ">${sanitize(initials)}</div>
+  `;
+}
+
+// ── Render an anonymous avatar (for anonymized discovery) ────
+function renderAnonymousAvatar(displayInitials, isRevealed, size = 44) {
+  if (isRevealed) {
+    return renderAvatar(displayInitials === "?" ? "??" : displayInitials, size);
+  }
+  return `
+    <div style="
+      width:${size}px; height:${size}px;
+      background:rgba(255,255,255,0.05);
+      border:2px dashed var(--border);
+      border-radius:50%;
+      display:flex; align-items:center; justify-content:center;
+      font-size:${Math.round(size * 0.4)}px;
+      font-weight:700; color:var(--muted);
+      flex-shrink:0;
+      font-family:'Space Grotesk', sans-serif;
+    ">\u{1F575}</div>
   `;
 }
 
@@ -70,6 +106,7 @@ const LEVEL_COLORS = {
 };
 
 function skillBadge(subject, level = null) {
+  const cleanSubj = sanitize(subject);
   if (level && LEVEL_COLORS[level]) {
     const c = LEVEL_COLORS[level];
     return `<span style="
@@ -78,7 +115,7 @@ function skillBadge(subject, level = null) {
       padding:2px 8px; border-radius:12px;
       font-size:11px; font-weight:600;
       display:inline-block; margin:2px;
-    ">${subject} · ${level}</span>`;
+    ">${cleanSubj} · ${level}</span>`;
   }
   return `<span style="
     background:#1A2560; color:#00C9E4;
@@ -86,7 +123,7 @@ function skillBadge(subject, level = null) {
     padding:2px 8px; border-radius:12px;
     font-size:11px; font-weight:600;
     display:inline-block; margin:2px;
-  ">${subject}</span>`;
+  ">${cleanSubj}</span>`;
 }
 
 // ── Free Now badge ────────────────────────────────────────────
@@ -143,7 +180,7 @@ function showToast(message, type = "success") {
 
   const toast = document.createElement("div");
   toast.id = "inai-toast";
-  toast.innerHTML = message;
+  toast.innerHTML = sanitize(message);
   toast.style.cssText = `
     position:fixed; bottom:24px; left:50%; transform:translateX(-50%);
     background:${c.bg}; border:1px solid ${c.border}; color:${c.text};
@@ -154,6 +191,52 @@ function showToast(message, type = "success") {
   `;
   document.body.appendChild(toast);
   setTimeout(() => toast.remove(), 3000);
+}
+
+// ── Confetti burst ──────────────────────────────────────────────
+function burstConfetti() {
+  const canvas = document.createElement("canvas");
+  canvas.style.cssText = "position:fixed;inset:0;z-index:99999;pointer-events:none;";
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  document.body.appendChild(canvas);
+  const ctx = canvas.getContext("2d");
+  const colors = ["#6C3FC7","#00C9E4","#22C55E","#F5C542","#EF4444","#3B82F6","#EC4899"];
+  const pieces = Array.from({length: 120}, () => ({
+    x: Math.random() * canvas.width,
+    y: -20,
+    w: 6 + Math.random() * 6,
+    h: 4 + Math.random() * 4,
+    color: colors[Math.floor(Math.random() * colors.length)],
+    vx: (Math.random() - 0.5) * 6,
+    vy: 2 + Math.random() * 4,
+    rot: Math.random() * 360,
+    rv: (Math.random() - 0.5) * 8,
+    gravity: 0.12,
+    drag: 0.98
+  }));
+  let frame = 0;
+  const maxFrames = 180;
+  function draw() {
+    if (frame++ > maxFrames) { canvas.remove(); return; }
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    pieces.forEach(p => {
+      p.x += p.vx;
+      p.vy += p.gravity;
+      p.y += p.vy;
+      p.vx *= p.drag;
+      p.rot += p.rv;
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.rot * Math.PI / 180);
+      ctx.globalAlpha = Math.max(0, 1 - frame / maxFrames);
+      ctx.fillStyle = p.color;
+      ctx.fillRect(-p.w/2, -p.h/2, p.w, p.h);
+      ctx.restore();
+    });
+    requestAnimationFrame(draw);
+  }
+  draw();
 }
 
 // ── Confirm modal ─────────────────────────────────────────────
@@ -170,7 +253,7 @@ function showConfirm(message, onConfirm) {
       border-radius:16px; padding:28px 32px; max-width:380px; width:90%;
       text-align:center;
     ">
-      <p style="color:#E8EAF6; font-size:15px; margin:0 0 20px;">${message}</p>
+      <p style="color:#E8EAF6; font-size:15px; margin:0 0 20px;">${sanitize(message)}</p>
       <div style="display:flex; gap:12px; justify-content:center;">
         <button id="confirm-yes" style="
           background:#6C3FC7; color:#fff; border:none;
@@ -193,6 +276,7 @@ function showConfirm(message, onConfirm) {
 // ── Relative time ─────────────────────────────────────────────
 function timeAgo(timestamp) {
   const diff = Date.now() - timestamp;
+  if (diff < 0) return "just now";
   const mins = Math.floor(diff / 60000);
   const hours = Math.floor(diff / 3600000);
   const days = Math.floor(diff / 86400000);
@@ -288,6 +372,10 @@ function injectBaseStyles() {
     @keyframes fadeIn {
       from { opacity:0; transform: translateY(12px); }
       to   { opacity:1; transform: translateY(0); }
+    }
+    @keyframes fadeInUp {
+      from { opacity:0; transform: translateY(20px) scale(0.96); }
+      to   { opacity:1; transform: translateY(0) scale(1); }
     }
     @keyframes pulse {
       0%, 100% { opacity:1; }
@@ -464,48 +552,72 @@ function injectBaseStyles() {
 // ── Render shared navbar ──────────────────────────────────────
 function renderNav(activePage = "") {
   const user = getSession();
+  const pendingCount = user ? getIncomingRequests(user.id).filter(r => r.status === "pending").length : 0;
+  const sessionPendingCount = user && typeof getIncomingSessionProposals === "function"
+    ? getIncomingSessionProposals(user.id).length : 0;
+
   const navLinks = [
     { href: "dashboard.html", label: "Dashboard", key: "dashboard" },
     { href: "match.html", label: "Find Match", key: "match" },
-    { href: "requests.html", label: "Requests", key: "requests" },
+    { href: "requests.html", label: "Requests", key: "requests", badgeId: "nav-requests-badge", badgeCount: pendingCount },
+    { href: "study-rooms.html", label: "Rooms", key: "rooms" },
+    { href: "sessions.html", label: "Sessions", key: "sessions", badgeId: "nav-sessions-badge", badgeCount: sessionPendingCount },
+    { href: "quiz.html", label: "Brain Match", key: "quiz" },
+    { href: "hostel-map.html", label: "Hostel Map", key: "map" },
     { href: "profile.html", label: "Profile", key: "profile" },
   ];
 
-  const links = navLinks.map(l => `
-    <a href="${l.href}" style="
-      color: ${activePage === l.key ? "var(--cyan)" : "var(--muted)"};
-      font-family: 'Space Grotesk', sans-serif;
-      font-size: 13px; font-weight: 600;
-      text-decoration: none; padding: 6px 12px;
-      border-radius: 8px;
-      background: ${activePage === l.key ? "rgba(0,201,228,0.08)" : "transparent"};
-      transition: all 0.2s;
-    "
-    onmouseover="this.style.color='var(--offwht)'"
-    onmouseout="this.style.color='${activePage === l.key ? "var(--cyan)" : "var(--muted)"}'">
-      ${l.label}
-    </a>`).join("");
+  const links = navLinks.map(l => {
+    const badgeHtml = l.badgeId ? `<span id="${l.badgeId}" style="
+          background:var(--red); color:#fff;
+          border-radius:50%; width:18px; height:18px;
+          font-size:10px; font-weight:700;
+          display:${l.badgeCount > 0 ? "inline-flex" : "none"}; align-items:center; justify-content:center;
+          margin-left:4px;">${l.badgeCount || ""}</span>` : "";
 
-  const pendingCount = user ? getIncomingRequests(user.id).filter(r => r.status === "pending").length : 0;
-  const badge = pendingCount > 0
-    ? `<span style="
-        background:var(--red); color:#fff;
-        border-radius:50%; width:18px; height:18px;
-        font-size:10px; font-weight:700;
-        display:inline-flex; align-items:center; justify-content:center;
-        margin-left:4px;">${pendingCount}</span>` : "";
+    return `
+      <a href="${l.href}" style="
+        color: ${activePage === l.key ? "var(--cyan)" : "var(--muted)"};
+        font-family: 'Space Grotesk', sans-serif;
+        font-size: 13px; font-weight: 600;
+        text-decoration: none; padding: 6px 12px;
+        border-radius: 8px;
+        background: ${activePage === l.key ? "rgba(0,201,228,0.08)" : "transparent"};
+        transition: all 0.2s;
+        display: inline-flex; align-items: center;
+      "
+      onmouseover="this.style.color='var(--offwht)'"
+      onmouseout="this.style.color='${activePage === l.key ? "var(--cyan)" : "var(--muted)"}'">
+        ${l.label}${badgeHtml}
+      </a>`;
+  }).join("");
+
+  const freeToggleBtn = user ? `
+    <button id="nav-free-toggle" onclick="toggleNavFreeNow()" class="inai-btn" style="
+      padding:5px 12px; font-size:11px; font-weight:700; cursor:pointer;
+      background:${user.freeNow ? "rgba(16,185,129,0.12)" : "rgba(255,255,255,0.04)"};
+      color:${user.freeNow ? "var(--green)" : "var(--muted)"};
+      border:1px solid ${user.freeNow ? "rgba(16,185,129,0.35)" : "var(--border)"};
+    ">${user.freeNow ? "🟢 Free" : "🔴 Busy"}</button>` : "";
 
   return `
     <nav class="inai-nav">
-      <div class="inai-nav-logo">IN<span>AI</span></div>
-      <div class="nav-links" style="display:flex; align-items:center; gap:4px;">
-        ${links.replace("Requests<", `Requests${badge}<`)}
+      <div class="inai-nav-top">
+        <div class="inai-nav-logo" style="display:flex;align-items:center;gap:8px;height:34px;">
+          <img src="assets/logo-dark-bg-removed.png" alt="INAI Logo" style="height:34px;max-width:100%;object-fit:contain;flex-shrink:0;" />
+        </div>
+        <button type="button" class="nav-hamburger" onclick="toggleNavMenu()" aria-label="Toggle menu">
+          <span></span><span></span><span></span>
+        </button>
       </div>
-      <div style="display:flex; align-items:center; gap:12px;">
+      <div class="nav-links" id="nav-links-panel">
+        ${links}
+      </div>
+      <div class="inai-nav-actions">
         ${user ? `
-          <span style="font-size:12px; color:var(--muted);">Hi, ${user.name.split(" ")[0]}</span>
-          ${freeNowBadge(user.freeNow)}
-          <button onclick="handleLogout()" class="inai-btn inai-btn-outline" style="padding:6px 14px; font-size:12px;">
+          <span style="font-size:12px;color:var(--muted);">Hi, ${sanitize(user.name.split(" ")[0])}</span>
+          ${freeToggleBtn}
+          <button onclick="handleLogout()" class="inai-btn inai-btn-outline" style="padding:6px 14px;font-size:12px;">
             Logout
           </button>` : `
           <a href="register.html" class="inai-btn inai-btn-primary" style="padding:7px 18px;">
@@ -515,13 +627,47 @@ function renderNav(activePage = "") {
     </nav>`;
 }
 
-// ── Logout ────────────────────────────────────────────────────
+function toggleNavMenu() {
+  const panel = document.getElementById("nav-links-panel");
+  const btn = document.querySelector(".nav-hamburger");
+  if (!panel) return;
+  panel.classList.toggle("nav-open");
+  if (btn) btn.classList.toggle("nav-open");
+}
+
+async function toggleNavFreeNow() {
+  const user = getSession();
+  if (!user) return;
+  const updated = !user.freeNow;
+  const success = await updateUser(user.id, { freeNow: updated });
+  if (success) {
+    showToast(updated ? "You are now Free Now!" : "Status set to Busy", "success");
+    const btn = document.getElementById("nav-free-toggle");
+    const fresh = getSession();
+    if (btn && fresh) {
+      btn.textContent = fresh.freeNow ? "🟢 Free" : "🔴 Busy";
+      btn.style.background = fresh.freeNow ? "rgba(16,185,129,0.12)" : "rgba(255,255,255,0.04)";
+      btn.style.color = fresh.freeNow ? "var(--green)" : "var(--muted)";
+      btn.style.borderColor = fresh.freeNow ? "rgba(16,185,129,0.35)" : "var(--border)";
+    }
+    const dashBtn = document.querySelector("button[onclick='toggleFreeNow()']");
+    if (dashBtn && fresh) {
+      dashBtn.textContent = fresh.freeNow ? "\u{1F7E2} I'm Free Now" : "\u{1F534} I'm Busy";
+      dashBtn.style.background = fresh.freeNow ? "rgba(16, 185, 129, 0.1)" : "rgba(255,255,255,0.05)";
+      dashBtn.style.color = fresh.freeNow ? "var(--green)" : "var(--muted)";
+      dashBtn.style.borderColor = fresh.freeNow ? "rgba(16,185,129,0.3)" : "var(--border)";
+    }
+  } else {
+    showToast("Failed to update status", "error");
+  }
+}
+
 // ── Logout ────────────────────────────────────────────────────
 function handleLogout() {
   showConfirm("Are you sure you want to logout?", () => {
     clearSession();
     showToast("Logged out successfully", "info");
-    setTimeout(() => window.location.href = "register.html", 800);
+    setTimeout(() => window.location.href = "register.html?tab=login", 800);
   });
 }
 
@@ -534,20 +680,40 @@ function checkNotifications() {
     // Only show on non-requests pages
     if (window.location.pathname.includes("requests.html")) return;
 
-    const bubble = document.createElement("a");
-    bubble.href = "requests.html";
-    bubble.innerHTML = `🔔 You have ${pending} pending request${pending > 1 ? 's' : ''}!`;
-    bubble.style.cssText = `
+    const dismissedAt = sessionStorage.getItem("inai_bubble_dismissed_at");
+    if (dismissedAt) return; // Suppress for this session
+
+    const container = document.createElement("div");
+    container.id = "inai-notification-bubble";
+    container.style.cssText = `
       position:fixed; bottom:24px; right:24px;
       background:var(--violet); color:#fff;
       padding:12px 20px; border-radius:30px;
       font-size:13px; font-weight:700; font-family:'Space Grotesk', sans-serif;
-      text-decoration:none; box-shadow:0 8px 24px rgba(108,63,199,0.4);
+      box-shadow:0 8px 24px rgba(108,63,199,0.4);
       z-index:9999; animation: bounceIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) both;
-      display:flex; align-items:center; gap:8px; transition: transform 0.2s;
+      display:flex; align-items:center; gap:12px; transition: transform 0.2s;
     `;
-    bubble.onmouseover = () => bubble.style.transform = "scale(1.05)";
-    bubble.onmouseout = () => bubble.style.transform = "scale(1)";
+    
+    const link = document.createElement("a");
+    link.href = "requests.html";
+    link.innerHTML = `\u{1F514} You have ${pending} pending request${pending > 1 ? 's' : ''}!`;
+    link.style.cssText = "color:#fff; text-decoration:none; display:flex; align-items:center; gap:8px;";
+    link.onmouseover = () => container.style.transform = "scale(1.05)";
+    link.onmouseout = () => container.style.transform = "scale(1)";
+
+    const closeBtn = document.createElement("button");
+    closeBtn.innerHTML = "×";
+    closeBtn.style.cssText = "background:transparent; border:none; color:rgba(255,255,255,0.7); font-size:18px; font-weight:700; cursor:pointer; padding:0 4px; line-height:1;";
+    closeBtn.onclick = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      sessionStorage.setItem("inai_bubble_dismissed_at", Date.now());
+      container.remove();
+    };
+
+    container.appendChild(link);
+    container.appendChild(closeBtn);
     
     if (!document.getElementById("bubble-keyframe")) {
       const style = document.createElement("style");
@@ -563,22 +729,151 @@ function checkNotifications() {
       document.head.appendChild(style);
     }
     
-    document.body.appendChild(bubble);
+    document.body.appendChild(container);
   }
 }
 
-// ── Simple password hasher ────────────────────────────────────
-function simpleHash(str) {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    hash = ((hash << 5) - hash) + str.charCodeAt(i);
-    hash |= 0;
+// ── Session Expiry Warnings ──────────────────────────────────
+function checkSessionExpiry() {
+  const time = sessionStorage.getItem("inai_session_time");
+  if (!time) return;
+  const elapsed = Date.now() - parseInt(time);
+  const timeLeft = 3600000 - elapsed;
+  if (timeLeft <= 0) return;
+  const warningTime = 55 * 60 * 1000; // 55 mins
+  if (elapsed >= warningTime) {
+    showToast("Your session is about to expire. Please save your work.", "info");
+  } else {
+    setTimeout(() => {
+      showToast("Your session is about to expire. Please save your work.", "info");
+    }, warningTime - elapsed);
   }
-  return hash.toString();
+}
+
+// ── Lightweight background polling ──────────────────────────
+function startRequestPolling() {
+  setInterval(async () => {
+    const user = getSession();
+    if (!user) return;
+    try {
+      const userToken = sessionStorage.getItem("inai_user_token") || "";
+      const adminToken = sessionStorage.getItem("inai_admin_token") || "";
+      const token = userToken || adminToken;
+      const headers = {};
+      if (token) {
+        headers["Authorization"] = "Bearer " + token;
+      }
+      const [reqRes, sessRes] = await Promise.all([
+        fetch(`${API_BASE}/requests`, { headers }),
+        fetch(`${API_BASE}/sessions`, { headers })
+      ]);
+      if (reqRes.ok) {
+        const reqs = await reqRes.json();
+        REQUESTS_CACHE = reqs;
+        const pendingCount = reqs.filter(r => r.to === user.id && r.status === "pending").length;
+        const badgeEl = document.getElementById("nav-requests-badge");
+        if (badgeEl) {
+          badgeEl.textContent = pendingCount || "";
+          badgeEl.style.display = pendingCount > 0 ? "inline-flex" : "none";
+        }
+        const bubble = document.getElementById("inai-notification-bubble");
+        if (pendingCount === 0 && bubble) {
+          bubble.remove();
+        } else if (pendingCount > 0 && !bubble && !sessionStorage.getItem("inai_bubble_dismissed_at")) {
+          checkNotifications();
+        }
+      }
+      if (sessRes.ok) {
+        const sessions = await sessRes.json();
+        SESSIONS_CACHE = sessions;
+        const sessionPending = sessions.filter(s => s.targetId === user.id && s.status === "pending").length;
+        const sessBadge = document.getElementById("nav-sessions-badge");
+        if (sessBadge) {
+          sessBadge.textContent = sessionPending || "";
+          sessBadge.style.display = sessionPending > 0 ? "inline-flex" : "none";
+        }
+        if (sessionPending > 0 && !window.location.pathname.includes("sessions.html")) {
+          checkSessionNotifications(sessionPending);
+        }
+      }
+    } catch (err) {
+      console.warn("Polling failed", err);
+    }
+  }, 60000);
+}
+
+function checkSessionNotifications(pending) {
+  if (document.getElementById("inai-session-bubble")) return;
+  if (sessionStorage.getItem("inai_session_bubble_dismissed")) return;
+
+  const container = document.createElement("div");
+  container.id = "inai-session-bubble";
+  container.style.cssText = `
+    position:fixed; bottom:24px; right:24px;
+    background:var(--cyan); color:#0A1128;
+    padding:12px 20px; border-radius:30px;
+    font-size:13px; font-weight:700; font-family:'Space Grotesk', sans-serif;
+    box-shadow:0 8px 24px rgba(6,182,212,0.35);
+    z-index:9998; display:flex; align-items:center; gap:12px;
+  `;
+  const link = document.createElement("a");
+  link.href = "sessions.html";
+  link.textContent = `\u{1F4C5} ${pending} session proposal${pending > 1 ? "s" : ""} waiting!`;
+  link.style.cssText = "color:#0A1128;text-decoration:none;font-weight:700;";
+  const closeBtn = document.createElement("button");
+  closeBtn.textContent = "×";
+  closeBtn.style.cssText = "background:transparent;border:none;color:rgba(0,0,0,0.5);font-size:18px;font-weight:700;cursor:pointer;";
+  closeBtn.onclick = (e) => {
+    e.preventDefault();
+    sessionStorage.setItem("inai_session_bubble_dismissed", "1");
+    container.remove();
+  };
+  container.appendChild(link);
+  container.appendChild(closeBtn);
+  document.body.appendChild(container);
+}
+
+// ── Show inline field error ───────────────────────────────────
+function showFieldError(fieldId, message) {
+  const field = document.getElementById(fieldId);
+  if (!field) return showToast(message, "error");
+
+  field.style.borderColor = "var(--red)";
+  field.style.boxShadow = "0 0 0 3px rgba(239,68,68,0.2)";
+
+  let err = field.parentElement.querySelector(".field-error");
+  if (!err) {
+    err = document.createElement("p");
+    err.className = "field-error";
+    err.style.cssText = "color:var(--red); font-size:11px; margin-top:4px; font-weight:600;";
+    field.parentElement.appendChild(err);
+  }
+  err.textContent = message;
+
+  field.addEventListener("input", () => {
+    field.style.borderColor = "";
+    field.style.boxShadow = "";
+    if (err) err.remove();
+  }, { once: true });
 }
 
 // Auto-inject base styles and check notifications when utils.js loads
 document.addEventListener("DOMContentLoaded", () => {
   injectBaseStyles();
+  if (sessionStorage.getItem("inai_show_expired_toast")) {
+    sessionStorage.removeItem("inai_show_expired_toast");
+    setTimeout(() => showToast("Your session expired after 1 hour. Please log in again.", "info"), 300);
+  }
   checkNotifications();
+  checkSessionExpiry();
+  startRequestPolling();
+  if (typeof fetchMySessions === "function") {
+    fetchMySessions().then(sessions => {
+      const user = getSession();
+      if (user && sessions.length) {
+        const pending = sessions.filter(s => s.targetId === user.id && s.status === "pending").length;
+        if (pending > 0) checkSessionNotifications(pending);
+      }
+    }).catch(() => {});
+  }
 });

@@ -10,6 +10,7 @@
     href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700;800&family=DM+Sans:wght@400;500;600&display=swap"
     rel="stylesheet" />
   <link rel="stylesheet" href="css/style.css" />
+  <link rel="icon" type="image/png" href="assets/favicon-bg-removed.png" />
   <style>
     .admin-table-container {
       max-height: 500px;
@@ -90,25 +91,106 @@
   <script>
     document.addEventListener("DOMContentLoaded", async () => {
       showLoader();
-      await initData();
-      hideLoader();
-      injectBaseStyles();
+      try {
+        await initData();
+      } finally {
+        hideLoader();
+      }
       await renderAdminPage();
     });
 
-    async function renderAdminPage() {
-      // Admin verification is checked by backend.
-      const adminPass = sessionStorage.getItem("inai_admin_auth");
-      if (adminPass !== "true" || !sessionStorage.getItem("inai_admin_password")) {
-        const pass = prompt("Admin Verification Required. Enter Admin Password:");
-        const result = await verifyAdminPassword(pass || "");
-        if (!result.success) {
-          alert(result.message || "Unauthorized access.");
-          window.location.href = "index.html";
-          return;
+    // ── In-page admin password modal (no ?pass= in URL) ─────────
+    function showAdminLoginModal() {
+      return new Promise((resolve) => {
+        const overlay = document.createElement("div");
+        overlay.id = "admin-auth-overlay";
+        overlay.style.cssText = `
+          position:fixed; inset:0; z-index:99999;
+          background:rgba(5,5,10,0.92); backdrop-filter:blur(12px);
+          display:flex; align-items:center; justify-content:center;
+          font-family:'Space Grotesk', sans-serif;
+        `;
+        overlay.innerHTML = `
+          <div style="
+            background:#0F1B4C; border:1px solid #2D3A8C;
+            border-radius:20px; padding:40px 36px;
+            max-width:380px; width:90%; text-align:center;
+            box-shadow:0 24px 60px rgba(0,0,0,0.7);
+          ">
+            <img src="assets/logo-dark-bg-removed.png" alt="INAI" style="height:40px; margin-bottom:20px;" />
+            <h2 style="font-size:20px; font-weight:800; color:#fff; margin-bottom:6px;">Admin Access</h2>
+            <p style="font-size:13px; color:#94A3B8; margin-bottom:24px;">Enter the admin password to continue.</p>
+            <input id="admin-pass-input" type="password" placeholder="Admin password"
+              autocomplete="current-password" spellcheck="false"
+              style="
+                width:100%; padding:12px 16px; margin-bottom:12px;
+                background:#05050A; border:1px solid #2D3A8C; border-radius:10px;
+                color:#F8FAFC; font-size:14px; font-family:'DM Sans',sans-serif;
+                outline:none; transition:border-color 0.2s; box-sizing:border-box;
+              "
+              onfocus="this.style.borderColor='#6366F1'"
+              onblur="this.style.borderColor='#2D3A8C'"
+            />
+            <p id="admin-pass-error" style="
+              color:#EF4444; font-size:12px; font-weight:600;
+              margin-bottom:12px; min-height:18px;
+            "></p>
+            <button id="admin-pass-submit" style="
+              width:100%; padding:12px; background:#6366F1; color:#fff;
+              border:none; border-radius:10px; font-size:14px; font-weight:700;
+              font-family:'Space Grotesk',sans-serif; cursor:pointer;
+              transition:background 0.2s;
+            "
+              onmouseover="this.style.background='#818CF8'"
+              onmouseout="this.style.background='#6366F1'"
+            >Verify</button>
+            <p style="margin-top:16px; font-size:12px; color:#475569;">
+              Not an admin? <a href="index.html" style="color:#06B6D4; text-decoration:none;">Go back home</a>
+            </p>
+          </div>
+        `;
+        document.body.appendChild(overlay);
+
+        const input = document.getElementById("admin-pass-input");
+        const btn = document.getElementById("admin-pass-submit");
+        const errEl = document.getElementById("admin-pass-error");
+
+        async function attempt() {
+          const pass = input.value;
+          if (!pass) {
+            errEl.textContent = "Please enter the admin password.";
+            input.focus();
+            return;
+          }
+          btn.textContent = "Verifying…";
+          btn.disabled = true;
+          errEl.textContent = "";
+          const result = await verifyAdminPassword(pass);
+          if (result.success) {
+            overlay.remove();
+            resolve();
+            await renderAdminPage();
+          } else {
+            errEl.textContent = result.message || "Incorrect password. Try again.";
+            input.value = "";
+            input.focus();
+            btn.textContent = "Verify";
+            btn.disabled = false;
+          }
         }
-        sessionStorage.setItem("inai_admin_auth", "true");
-        sessionStorage.setItem("inai_admin_password", pass || "");
+
+        btn.addEventListener("click", attempt);
+        input.addEventListener("keydown", (e) => { if (e.key === "Enter") attempt(); });
+        requestAnimationFrame(() => input.focus());
+      });
+    }
+
+    async function renderAdminPage() {
+      const adminToken = sessionStorage.getItem("inai_admin_token");
+
+      if (!adminToken) {
+        await showAdminLoginModal();
+        return; // modal will call renderAdminPage() again on success
       }
 
       const users = getAllUsers();
@@ -120,7 +202,10 @@
 
       document.getElementById("app").innerHTML = `
         <nav class="inai-nav">
-          <div class="inai-nav-logo">IN<span>AI</span> <span style="font-size:12px;color:var(--red);font-weight:700;">[ADMIN]</span></div>
+          <div class="inai-nav-logo" style="display: flex; align-items: center; gap: 8px; height: 34px;">
+            <img src="assets/logo-dark-bg-removed.png" alt="INAI Logo" style="height: 34px; max-width: 100%; object-fit: contain; flex-shrink: 0;" />
+            <span style="font-size: 12px; color: var(--red); font-weight: 700; font-family: 'Space Grotesk', sans-serif; letter-spacing: 0.5px; text-transform: uppercase; margin-left: 2px;">[ADMIN]</span>
+          </div>
           <div style="display:flex; align-items:center; gap:12px;">
             <a href="index.html" class="inai-btn inai-btn-outline" style="padding:6px 14px; font-size:12px;">
               Exit Admin
@@ -147,8 +232,14 @@
             </div>
           </div>
 
+          ${renderAdminCharts(users)}
+
           <div class="inai-card" style="padding: 24px;">
             <h3 style="font-size:16px; font-weight:700; color:var(--white); font-family:'Space Grotesk',sans-serif; margin-bottom:16px;">Registered Users</h3>
+            
+            <div style="margin-bottom:16px;">
+              <input type="text" id="admin-search" oninput="filterAdminTable(this.value)" placeholder="Search users by name, hostel, or branch..." class="inai-input" style="max-width:380px;" />
+            </div>
             
             <div class="admin-table-container">
               <table class="admin-table">
@@ -168,22 +259,22 @@
                       <div style="display:flex; align-items:center; gap:10px;">
                         ${renderAvatar(u.name, 32)}
                         <div>
-                          <div style="font-weight:700;">${u.name}</div>
-                          <div style="font-size:11px; color:var(--muted);">${u.gender}</div>
+                          <div style="font-weight:700;">${sanitize(u.name)}</div>
+                          <div style="font-size:11px; color:var(--muted);">${sanitize(u.gender)}</div>
                         </div>
                       </div>
                     </td>
                     <td>
-                      <div>${u.hostel}</div>
-                      <div style="font-size:11px; color:var(--muted);">Block ${u.block}</div>
+                      <div>${sanitize(u.hostel)}</div>
+                      <div style="font-size:11px; color:var(--muted);">Block ${sanitize(u.block)}</div>
                     </td>
                     <td>
-                      <div>${u.branch}</div>
-                      <div style="font-size:11px; color:var(--muted);">${u.year}</div>
+                      <div>${sanitize(u.branch)}</div>
+                      <div style="font-size:11px; color:var(--muted);">${sanitize(u.year)}</div>
                     </td>
                     <td>
                       <div style="max-width:200px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
-                        ${u.strongSkills.map(s => s.subject).join(', ')}
+                        ${u.strongSkills.map(s => sanitize(s.subject)).join(', ')}
                       </div>
                     </td>
                     <td>
@@ -201,11 +292,17 @@
     }
 
     function deleteUser(userId) {
-      showConfirm("Are you sure you want to delete this user? This cannot be undone.", async () => {
+      const targetUser = getUserById(userId);
+      if (!targetUser) return;
+      const requests = getAllRequests();
+      const userRequests = requests.filter(r => r.from === userId || r.to === userId);
+      const connectionsCount = userRequests.filter(r => r.status === "accepted").length;
+      const pendingCount = userRequests.filter(r => r.status === "pending").length;
+
+      showConfirm(`Delete ${sanitize(targetUser.name)}? This will also remove their ${connectionsCount} connections and ${pendingCount} pending requests permanently.`, async () => {
         const success = await deleteUserAPI(userId);
         
         if (success) {
-          // Check if deleted user is current session
           const session = getSession();
           if (session && session.id === userId) {
             clearSession();
@@ -217,6 +314,111 @@
           showToast("Failed to delete user.", "error");
         }
       });
+    }
+
+    function filterAdminTable(query) {
+      const q = query.toLowerCase().trim();
+      const rows = document.querySelectorAll(".admin-table tbody tr");
+      rows.forEach(row => {
+        // Skip header if matched (not inside tbody)
+        const text = row.innerText.toLowerCase();
+        if (text.includes(q)) {
+          row.style.display = "";
+        } else {
+          row.style.display = "none";
+        }
+      });
+    }
+
+    function renderAdminCharts(users) {
+      const branches = {};
+      users.forEach(u => {
+        const b = (u.branch || "Unknown").toUpperCase().trim();
+        branches[b] = (branches[b] || 0) + 1;
+      });
+      
+      const sortedBranches = Object.entries(branches).sort((a, b) => b[1] - a[1]);
+      const maxBranchCount = Math.max(...Object.values(branches), 1);
+      
+      let branchBarsHtml = "";
+      const barWidth = 35;
+      const barGap = 20;
+      const chartHeight = 100;
+      const startX = 40;
+      
+      sortedBranches.slice(0, 5).forEach((item, idx) => {
+        const [name, count] = item;
+        const barHeight = (count / maxBranchCount) * chartHeight;
+        const x = startX + idx * (barWidth + barGap);
+        const y = 120 - barHeight;
+        branchBarsHtml += `
+          <rect x="${x}" y="${y}" width="${barWidth}" height="${barHeight}" fill="url(#violet-grad)" rx="4" />
+          <text x="${x + barWidth / 2}" y="140" fill="var(--muted)" font-size="9" text-anchor="middle" font-family="Space Grotesk">${name}</text>
+          <text x="${x + barWidth / 2}" y="${y - 6}" fill="var(--white)" font-size="10" font-weight="700" text-anchor="middle" font-family="Space Grotesk">${count}</text>
+        `;
+      });
+      
+      let males = 0;
+      let females = 0;
+      users.forEach(u => {
+        if (u.gender === "Male") males++;
+        else if (u.gender === "Female") females++;
+      });
+      const total = males + females || 1;
+      const malePct = Math.round((males / total) * 100);
+      const femalePct = Math.round((females / total) * 100);
+      
+      const circ = 251.2;
+      const maleOffset = circ - (malePct / 100) * circ;
+      
+      return `
+        <div style="display:flex; gap:20px; flex-wrap:wrap; margin-bottom:32px;">
+          <!-- Branch Bar Chart Card -->
+          <div class="inai-card" style="flex:1.5; min-width:320px; padding:20px;">
+            <h3 style="font-size:12px; color:var(--muted); text-transform:uppercase; margin-bottom:16px; font-family:'Space Grotesk',sans-serif; letter-spacing:0.5px;">Branch Distribution</h3>
+            <div style="display:flex; justify-content:center;">
+              <svg width="320" height="150" style="overflow:visible;">
+                <defs>
+                  <linearGradient id="violet-grad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="var(--violet)" />
+                    <stop offset="100%" stop-color="rgba(99, 102, 241, 0.4)" />
+                  </linearGradient>
+                </defs>
+                <!-- X Axis -->
+                <line x1="20" y1="120" x2="300" y2="120" stroke="var(--border)" stroke-width="1" />
+                ${branchBarsHtml}
+              </svg>
+            </div>
+          </div>
+          
+          <!-- Gender Donut Card -->
+          <div class="inai-card" style="flex:1; min-width:260px; padding:20px;">
+            <h3 style="font-size:12px; color:var(--muted); text-transform:uppercase; margin-bottom:16px; font-family:'Space Grotesk',sans-serif; letter-spacing:0.5px;">Gender Ratio</h3>
+            <div style="display:flex; align-items:center; justify-content:center; gap:20px; height:110px;">
+              <svg width="80" height="80" viewBox="0 0 100 100" style="transform: rotate(-90deg);">
+                <!-- Background circle -->
+                <circle cx="50" cy="50" r="40" fill="transparent" stroke="var(--border)" stroke-width="10" />
+                <!-- Female circle -->
+                <circle cx="50" cy="50" r="40" fill="transparent" stroke="var(--cyan)" stroke-width="10"
+                  stroke-dasharray="${circ}" stroke-dashoffset="0" />
+                <!-- Male circle -->
+                <circle cx="50" cy="50" r="40" fill="transparent" stroke="var(--violet)" stroke-width="10"
+                  stroke-dasharray="${circ}" stroke-dashoffset="${maleOffset}" />
+              </svg>
+              <div style="display:flex; flex-direction:column; gap:8px;">
+                <div style="display:flex; align-items:center; gap:8px;">
+                  <span style="width:12px; height:12px; background:var(--violet); border-radius:3px; display:inline-block;"></span>
+                  <span style="font-size:12px; font-weight:700; color:var(--white);">Male: ${malePct}% (${males})</span>
+                </div>
+                <div style="display:flex; align-items:center; gap:8px;">
+                  <span style="width:12px; height:12px; background:var(--cyan); border-radius:3px; display:inline-block;"></span>
+                  <span style="font-size:12px; font-weight:700; color:var(--white);">Female: ${femalePct}% (${females})</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
     }
   </script>
 </body>

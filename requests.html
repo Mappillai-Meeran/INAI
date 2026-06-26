@@ -9,6 +9,7 @@
     href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700;800&family=DM+Sans:wght@400;500;600&display=swap"
     rel="stylesheet" />
   <link rel="stylesheet" href="css/style.css" />
+  <link rel="icon" type="image/png" href="assets/favicon-bg-removed.png" />
 </head>
 
 <body>
@@ -21,9 +22,11 @@
   <script>
     document.addEventListener("DOMContentLoaded", async () => {
       showLoader();
-      await initData();
-      hideLoader();
-      injectBaseStyles();
+      try {
+        await initData();
+      } finally {
+        hideLoader();
+      }
       const user = requireLogin();
       if (!user) return;
 
@@ -37,20 +40,20 @@
 
       <div style="margin-bottom:20px;">
         <h2 class="inai-section-title" style="font-size:24px;">Requests</h2>
-        <p class="inai-section-sub">Manage your study and roommate connection requests</p>
+        <p class="inai-section-sub">Manage your study and roommate connection requests. Want to send a new request? Head to the <a href="match.html" style="color:var(--cyan); text-decoration:underline;">Find Match</a> page.</p>
       </div>
 
       <!-- Tabs -->
       <div class="inai-tabs">
         <button class="inai-tab active" id="tab-incoming" onclick="switchReqTab('incoming')">
           📥 Incoming
-          ${pending > 0 ? `<span style="background:var(--red);color:#fff;
-            border-radius:50%;width:18px;height:18px;font-size:10px;
-            display:inline-flex;align-items:center;justify-content:center;
-            margin-left:6px;">${pending}</span>` : ""}
+          <span id="incoming-pending-badge"></span>
         </button>
         <button class="inai-tab" id="tab-outgoing" onclick="switchReqTab('outgoing')">
-          📤 Sent (${outgoing.length})
+          📤 Sent <span id="outgoing-active-count"></span>
+        </button>
+        <button class="inai-tab" id="tab-history" onclick="switchReqTab('history')">
+          📜 History <span id="history-count"></span>
         </button>
       </div>
 
@@ -59,7 +62,7 @@
         ${pending > 0 ? `
           <h3 style="font-size:14px;font-weight:700;color:var(--gold);
             font-family:'Space Grotesk',sans-serif;
-            margin-bottom:12px;">⏳ Pending (${pending})</h3>
+            margin-bottom:12px;">⌛ Pending (${pending})</h3>
           <div id="incoming-pending" style="display:flex;flex-direction:column;gap:12px;margin-bottom:20px;"></div>
           <div class="inai-divider"></div>
         ` : ""}
@@ -75,6 +78,11 @@
         <div id="outgoing-list" style="display:flex;flex-direction:column;gap:12px;"></div>
       </div>
 
+      <!-- History -->
+      <div id="history-section" style="display:none;">
+        <div id="history-list" style="display:flex;flex-direction:column;gap:12px;"></div>
+      </div>
+
     </div>`;
 
       renderRequestsPage();
@@ -83,8 +91,10 @@
     function switchReqTab(tab) {
       document.getElementById("incoming-section").style.display = tab === "incoming" ? "block" : "none";
       document.getElementById("outgoing-section").style.display = tab === "outgoing" ? "block" : "none";
+      document.getElementById("history-section").style.display = tab === "history" ? "block" : "none";
       document.getElementById("tab-incoming").classList.toggle("active", tab === "incoming");
       document.getElementById("tab-outgoing").classList.toggle("active", tab === "outgoing");
+      document.getElementById("tab-history").classList.toggle("active", tab === "history");
     }
   </script>
 </body>

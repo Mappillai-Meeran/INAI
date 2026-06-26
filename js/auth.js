@@ -3,8 +3,6 @@
 // Handles: Register, Login, Form Validation
 // ============================================================
 
-
-
 // ── Register a new user ───────────────────────────────────────
 async function handleRegister(e) {
   e.preventDefault();
@@ -13,12 +11,12 @@ async function handleRegister(e) {
   const name = document.getElementById("reg-name").value.trim();
   const password = document.getElementById("reg-password").value;
   const gender = document.getElementById("reg-gender").value;
-  const hostel = document.getElementById("reg-hostel").value;
-  const block = document.getElementById("reg-block").value;
+  const hostel = document.getElementById("reg-hostel").value.trim();
+  const block = document.getElementById("reg-block").value.trim();
   const room = document.getElementById("reg-room").value.trim();
-  const year = document.getElementById("reg-year").value;
-  const branch = document.getElementById("reg-branch").value;
-  const state = document.getElementById("reg-state").value;
+  const year = document.getElementById("reg-year").value.trim();
+  const branch = document.getElementById("reg-branch").value.trim();
+  const state = document.getElementById("reg-state").value.trim();
   const language = document.getElementById("reg-language").value.trim();
 
   // Collect strong skills with levels
@@ -39,13 +37,20 @@ async function handleRegister(e) {
 
   // ── Validation ──────────────────────────────────────────────
   if (!name) return showFieldError("reg-name", "Name is required");
-  if (name.length < 3) return showFieldError("reg-name", "Name too short");
+  if (name.length < 3) return showFieldError("reg-name", "Name too short (min 3 characters)");
+  if (name.length > 50) return showFieldError("reg-name", "Name too long (max 50 characters)");
+  
   if (!password) return showFieldError("reg-password", "Password is required");
   if (password.length < 6) return showFieldError("reg-password", "Use at least 6 characters");
   if (!gender) return showFieldError("reg-gender", "Select your gender");
-  if (!hostel) return showFieldError("reg-hostel", "Enter your hostel");
+  if (!hostel) return showFieldError("reg-hostel", "Enter your hostel name");
   if (!block) return showFieldError("reg-block", "Enter your block");
+  
   if (!room) return showFieldError("reg-room", "Enter your room number");
+  if (!/^[A-Za-z0-9\-]{1,10}$/.test(room)) {
+    return showFieldError("reg-room", "Room must be alphanumeric (dashes allowed, max 10 chars)");
+  }
+  
   if (!year) return showFieldError("reg-year", "Enter your year");
   if (!branch) return showFieldError("reg-branch", "Enter your branch");
   if (!state) return showFieldError("reg-state", "Enter your state");
@@ -74,20 +79,25 @@ async function handleRegister(e) {
     avatar: getInitials(name),
     bio: "",
     rating: 0,
+    ratingCount: 0,
     helpCount: 0,
     joinedAt: Date.now()
   };
 
   // Save to MongoDB
   if (typeof showLoader === 'function') showLoader();
-  const result = await saveUser(newUser);
-  if (typeof hideLoader === 'function') hideLoader();
+  let result;
+  try {
+    result = await saveUser(newUser);
+  } finally {
+    if (typeof hideLoader === 'function') hideLoader();
+  }
   if (!result.success) {
     return showToast(result.message, "error");
   }
 
   // Set session and redirect
-  setSession(newUser);
+  setSession(result.user);
   showToast("Welcome to INAI, " + name.split(" ")[0] + "!", "success");
   setTimeout(() => window.location.href = "dashboard.html", 1000);
 }
@@ -103,8 +113,12 @@ async function handleLogin(e) {
   if (!password) return showFieldError("login-password", "Enter your password");
 
   if (typeof showLoader === 'function') showLoader();
-  const result = await loginUser(name, password);
-  if (typeof hideLoader === 'function') hideLoader();
+  let result;
+  try {
+    result = await loginUser(name, password);
+  } finally {
+    if (typeof hideLoader === 'function') hideLoader();
+  }
 
   if (!result.success) {
     return showToast(result.message, "error");
@@ -115,59 +129,9 @@ async function handleLogin(e) {
   setTimeout(() => window.location.href = "dashboard.html", 800);
 }
 
-// Reset password using basic account details
-async function handleForgotPassword(e) {
-  e.preventDefault();
 
-  const name = document.getElementById("reset-name").value.trim();
-  const room = document.getElementById("reset-room").value.trim();
-  const state = document.getElementById("reset-state").value.trim();
-  const newPassword = document.getElementById("reset-password").value;
 
-  if (!name) return showFieldError("reset-name", "Enter your registered name");
-  if (!room) return showFieldError("reset-room", "Enter your room number");
-  if (!state) return showFieldError("reset-state", "Enter your state");
-  if (!newPassword) return showFieldError("reset-password", "Enter a new password");
-  if (newPassword.length < 6) return showFieldError("reset-password", "Use at least 6 characters");
 
-  const result = await resetPassword({ name, room, state, newPassword });
-  if (!result.success) {
-    return showToast(result.message, "error");
-  }
-
-  showToast(result.message, "success");
-  document.getElementById("forgot-form").reset();
-  switchTab("login");
-}
-
-// ── Show inline field error ───────────────────────────────────
-function showFieldError(fieldId, message) {
-  const field = document.getElementById(fieldId);
-  if (!field) return showToast(message, "error");
-
-  field.style.borderColor = "var(--red)";
-  field.style.boxShadow = "0 0 0 3px rgba(239,68,68,0.2)";
-
-  let err = field.parentElement.querySelector(".field-error");
-  if (!err) {
-    err = document.createElement("p");
-    err.className = "field-error";
-    err.style.cssText = "color:var(--red); font-size:11px; margin-top:4px; font-weight:600;";
-    field.parentElement.appendChild(err);
-  }
-  err.textContent = message;
-
-  field.addEventListener("input", () => {
-    field.style.borderColor = "";
-    field.style.boxShadow = "";
-    if (err) err.remove();
-  }, { once: true });
-}
-
-// ── Dynamically update hostel list when gender changes ────────
-function onGenderChange() {
-  // Deprecated since hostel is now a custom text input
-}
 
 function addStrongSkillRow() {
   const container = document.getElementById("strong-skills-container");
@@ -180,7 +144,7 @@ function addStrongSkillRow() {
   row.className = "strong-skill-row";
   row.style.cssText = "display:flex; gap:8px; margin-bottom:8px; align-items:center;";
   row.innerHTML = `
-    <input type="text" class="skill-subject inai-sel" placeholder="e.g. DSA, Python"
+    <input type="text" class="skill-subject inai-sel" placeholder="e.g. DSA, Python" list="skills-list"
       style="flex:2; padding:11px 14px; background:var(--navy); border:1px solid var(--border); border-radius:10px; color:var(--offwht); font-size:13px; outline:none;" />
     <select class="inai-select skill-level" style="flex:1; padding:11px 14px; background:var(--navy); border:1px solid var(--border); border-radius:10px; color:var(--offwht); font-size:13px; outline:none;">
       <option value="Basic">Basic</option>
@@ -236,17 +200,22 @@ function switchTab(tab) {
 
 // ── Build need-help checkboxes ────────────────────────────────
 function buildNeedHelpCheckboxes() {
-  // Deprecated since "need help" is now a custom text input
-}
-
-function toggleNeedLabel(checkbox) {
   // Deprecated
 }
 
-// ── Check URL for tab switch on load ──────────────────────────
+// ── Check URL for tab switch on load and setup autocomplete ────
 document.addEventListener("DOMContentLoaded", () => {
   const params = new URLSearchParams(window.location.search);
   if (params.get("tab") === "login") {
     switchTab("login");
+  }
+
+  // Setup Skills autocomplete list
+  if (!document.getElementById("skills-list")) {
+    const dl = document.createElement("datalist");
+    dl.id = "skills-list";
+    const subjects = ["DSA", "DBMS", "OS", "Python", "Java", "Maths", "Physics", "React", "Node.js", "Web Development", "Machine Learning", "Networks"];
+    dl.innerHTML = subjects.map(s => `<option value="${s}"></option>`).join("");
+    document.body.appendChild(dl);
   }
 });

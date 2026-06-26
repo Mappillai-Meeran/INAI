@@ -1,0 +1,8 @@
+{
+  "name": "inai",
+  "version": "1.0.0",
+  "description": "INAI Smart Study & Roommate Matching",
+  "scripts": {
+    "dev": "npx --yes http-server -p 3000"
+  }
+}

@@ -4,7 +4,7 @@
 // ============================================================
 
 // ── Send a study / roommate request ──────────────────────────
-function sendRequest(fromUser, toUserId, type = "study") {
+async function sendRequest(fromUser, toUserId, type = "study") {
   if (requestAlreadySent(fromUser.id, toUserId)) {
     showToast("You already sent a request to this person.", "info");
     return false;
@@ -27,39 +27,67 @@ function sendRequest(fromUser, toUserId, type = "study") {
     timestamp: Date.now(),
     updatedAt: null
   };
-  saveRequest(req);
-  showToast(`Request sent to ${toUser.name}!`, "success");
-  return true;
+  const ok = await saveRequest(req);
+  if (ok) {
+    const connected = isMutuallyConnected(fromUser.id, toUserId);
+    const received = requestAlreadySent(toUserId, fromUser.id);
+    const isRevealed = connected || received;
+    showToast(`Request sent to ${isRevealed ? toUser.name : "Anonymous Student"}!`, "success");
+    return true;
+  } else {
+    showToast("Failed to send request.", "error");
+    return false;
+  }
 }
 
 // ── Accept a request ─────────────────────────────────────────
-function acceptRequest(requestId) {
-  const ok = updateRequest(requestId, "accepted");
+async function acceptRequest(requestId) {
+  const ok = await updateRequest(requestId, "accepted");
   if (ok) {
     showToast("Request accepted! Room number is now visible.", "success");
-    setTimeout(renderRequestsPage, 600);
+    if (typeof burstConfetti === "function") burstConfetti();
+    if (typeof renderRequestsPage === "function") setTimeout(renderRequestsPage, 300);
+  } else {
+    showToast("Failed to accept request.", "error");
   }
 }
 
 // ── Decline a request ────────────────────────────────────────
-function declineRequest(requestId) {
-  showConfirm("Decline this request?", () => {
-    const ok = updateRequest(requestId, "declined");
-    if (ok) {
-      showToast("Request declined.", "info");
-      setTimeout(renderRequestsPage, 400);
-    }
+async function declineRequest(requestId) {
+  return new Promise((resolve) => {
+    showConfirm("Decline this request?", async () => {
+      const ok = await updateRequest(requestId, "declined");
+      if (ok) {
+        showToast("Request declined.", "info");
+        if (typeof renderRequestsPage === "function") setTimeout(renderRequestsPage, 300);
+        resolve(true);
+      } else {
+        showToast("Failed to decline request.", "error");
+        resolve(false);
+      }
+    });
   });
 }
 
 // ── Disconnect a connection ──────────────────────────────────
-function disconnectUser(requestId) {
-  showConfirm("Remove this connection?", () => {
-    const ok = updateRequest(requestId, "disconnected");
-    if (ok) {
-      showToast("Connection removed.", "info");
-      setTimeout(() => window.location.reload(), 400);
-    }
+async function disconnectUser(requestId) {
+  return new Promise((resolve) => {
+    showConfirm("Remove this connection?", async () => {
+      const ok = await updateRequest(requestId, "disconnected");
+      if (ok) {
+        showToast("Connection removed.", "info");
+        if (typeof renderRequestsPage === "function") {
+          setTimeout(renderRequestsPage, 300);
+        } else {
+          const card = document.querySelector(`[onclick*="${requestId}"]`)?.closest(".inai-card, .request-card");
+          if (card) card.remove();
+        }
+        resolve(true);
+      } else {
+        showToast("Failed to remove connection.", "error");
+        resolve(false);
+      }
+    });
   });
 }
 
@@ -71,24 +99,38 @@ function renderRequestsPage() {
   const incoming = getIncomingRequests(currentUser.id);
   const outgoing = getOutgoingRequests(currentUser.id);
 
-  const pending   = incoming.filter(r => r.status === "pending");
-  const accepted  = incoming.filter(r => r.status === "accepted");
-  const declined  = incoming.filter(r => r.status === "declined");
+  const incomingPending   = incoming.filter(r => r.status === "pending");
+  const incomingAccepted  = incoming.filter(r => r.status === "accepted");
+  const outgoingActive    = outgoing.filter(r => r.status === "pending" || r.status === "accepted");
+  const history           = [...incoming, ...outgoing].filter(r => r.status === "declined" || r.status === "disconnected");
 
-  renderRequestSection("incoming-pending",  pending,  currentUser, "incoming-pending");
-  renderRequestSection("incoming-accepted", accepted, currentUser, "incoming-accepted");
-  renderRequestSection("outgoing-list",     outgoing, currentUser, "outgoing");
+  renderRequestSection("incoming-pending",  incomingPending,  currentUser, "incoming-pending");
+  renderRequestSection("incoming-accepted", incomingAccepted, currentUser, "incoming-accepted");
+  renderRequestSection("outgoing-list",     outgoingActive,   currentUser, "outgoing");
+  renderRequestSection("history-list",      history,          currentUser, "history");
+
+  // Update tab headers dynamically
+  const incomingPendingBadge = document.getElementById("incoming-pending-badge");
+  if (incomingPendingBadge) {
+    incomingPendingBadge.innerHTML = incomingPending.length > 0 ? `<span style="background:var(--red);color:#fff;
+      border-radius:50%;width:18px;height:18px;font-size:10px;
+      display:inline-flex;align-items:center;justify-content:center;
+      margin-left:6px;">${incomingPending.length}</span>` : "";
+  }
+
+  const outgoingActiveCount = document.getElementById("outgoing-active-count");
+  if (outgoingActiveCount) {
+    outgoingActiveCount.textContent = `(${outgoingActive.length})`;
+  }
+
+  const historyCount = document.getElementById("history-count");
+  if (historyCount) {
+    historyCount.textContent = `(${history.length})`;
+  }
 
   // Update badges
   const badge = document.getElementById("pending-badge");
-  if (badge) badge.textContent = pending.length || "";
-
-  const tabs = document.querySelectorAll(".req-tab-count");
-  tabs.forEach(t => {
-    if (t.dataset.type === "pending")  t.textContent = pending.length;
-    if (t.dataset.type === "accepted") t.textContent = accepted.length;
-    if (t.dataset.type === "outgoing") t.textContent = outgoing.length;
-  });
+  if (badge) badge.textContent = incomingPending.length || "";
 }
 
 // ── Render a list of request cards ───────────────────────────
@@ -97,24 +139,52 @@ function renderRequestSection(containerId, requests, currentUser, type) {
   if (!container) return;
 
   if (requests.length === 0) {
+    if (typeof isBackendDown === "function" && isBackendDown()) {
+      container.innerHTML = `
+        <div class="inai-empty" style="border: 1px dashed var(--red); background: rgba(239, 68, 68, 0.05); border-radius: 12px; padding: 24px;">
+          <div class="inai-empty-icon" style="color: var(--red); margin-bottom: 8px;">⚠️</div>
+          <p style="color: var(--red); font-weight: 700;">Connection Offline</p>
+          <p style="font-size: 12px; margin-top: 4px; color: var(--muted);">Unable to load requests. Please check if the backend is running.</p>
+        </div>`;
+      return;
+    }
     container.innerHTML = `
       <div class="inai-empty">
-        <div class="inai-empty-icon">📭</div>
+        <div class="inai-empty-icon">📂</div>
         <p>No requests here yet</p>
       </div>`;
     return;
   }
 
   container.innerHTML = requests.map(req => {
-    const isIncoming = type !== "outgoing";
-    const otherId    = isIncoming ? req.from : req.to;
+    const isIncoming = type !== "outgoing" && type !== "history";
+    const otherId    = req.from === currentUser.id ? req.to : req.from;
     const otherUser  = getUserById(otherId);
-    if (!otherUser) return "";
+    if (!otherUser) {
+      return `
+        <div class="request-card" style="display:flex; align-items:center;
+          gap:16px; padding:16px 20px; 
+          background:rgba(255,255,255,0.02); border-bottom:1px solid rgba(255,255,255,0.05);
+          transition:background 0.2s; animation:fadeIn 0.3s ease both;">
+          <div style="width:44px; height:44px; border-radius:50%; background:#333; display:flex; align-items:center; justify-content:center; font-weight:700; color:#fff; font-family:'Space Grotesk', sans-serif;">?</div>
+          <div style="flex:1; min-width:0;">
+            <h4 style="font-size:15px; font-weight:700; color:var(--white); font-family:'Space Grotesk',sans-serif;">User no longer exists</h4>
+            <p style="font-size:13px; color:var(--muted); margin-top:4px;">This account has been deleted.</p>
+          </div>
+          <div class="request-card-actions" style="flex-shrink:0;">
+            <button onclick="disconnectUser('${req.id}')" style="background:transparent; border:1px solid var(--red); color:var(--red); padding:6px 10px; border-radius:8px; font-size:11px; font-weight:700; cursor:pointer;">
+              Remove
+            </button>
+          </div>
+        </div>`;
+    }
 
     const connected = req.status === "accepted";
+    const isRevealed = connected || (isIncoming && req.status === "pending") || req.status === "declined" || req.status === "disconnected";
+    const displayName = isRevealed ? otherUser.name : "Anonymous Student";
     const roomInfo  = connected
       ? `<span style="color:var(--green); font-weight:700;">
-          🔓 Room ${otherUser.room}, Block ${otherUser.block}
+          🔓 Room ${sanitize(otherUser.room)}, Block ${sanitize(otherUser.block)}
          </span>`
       : `<span style="color:var(--muted);">🔒 Room hidden until accepted</span>`;
 
@@ -151,7 +221,14 @@ function renderRequestSection(containerId, requests, currentUser, type) {
         color:var(--red); font-size:12px; font-weight:600;
         background:#450a0a; border:1px solid #EF4444;
         padding:6px 14px; border-radius:8px; display:inline-block;">
-        ✗ Declined
+        ✕ Declined
+      </span>`;
+    } else if (req.status === "disconnected") {
+      actions = `<span style="
+        color:var(--muted); font-size:12px; font-weight:600;
+        background:rgba(255,255,255,0.05); border:1px solid var(--border);
+        padding:6px 14px; border-radius:8px; display:inline-block;">
+        Disconnected
       </span>`;
     } else if (req.status === "pending" && !isIncoming) {
       actions = `<span style="
@@ -170,17 +247,17 @@ function renderRequestSection(containerId, requests, currentUser, type) {
         ${isIncoming && req.status === "pending" ? "border-left: 3px solid var(--cyan);" : ""}"
         onmouseover="this.style.background='rgba(255,255,255,0.05)'"
         onmouseout="this.style.background='rgba(255,255,255,0.02)'">
-        ${renderAvatar(otherUser.name, 44)}
+        ${isRevealed ? renderAvatar(otherUser.name, 44) : renderAnonymousAvatar("?", false, 44)}
         <div style="flex:1; min-width:0;">
           <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
             <h4 style="font-size:15px; font-weight:700; color:var(--white);
-              font-family:'Space Grotesk',sans-serif;">${otherUser.name}</h4>
+              font-family:'Space Grotesk',sans-serif;">${sanitize(displayName)}</h4>
             <span style="font-size:11px; color:var(--muted); background:rgba(255,255,255,0.05); padding:2px 8px; border-radius:10px;">
               ${req.type === "study" ? "Study" : "Roommate"}
             </span>
           </div>
           <p style="font-size:13px; color:var(--muted); margin-top:4px;">
-            ${otherUser.year} · ${otherUser.branch} <span style="opacity:0.5">·</span> ${timeAgo(req.timestamp)}
+            ${sanitize(otherUser.year)} · ${sanitize(otherUser.branch)} <span style="opacity:0.5">·</span> ${timeAgo(req.timestamp)}
           </p>
           <p style="font-size:12px; margin-top:4px;">${roomInfo}</p>
         </div>

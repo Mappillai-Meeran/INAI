@@ -353,6 +353,7 @@
     }
   </style>
   <link rel="stylesheet" href="css/style.css" />
+  <link rel="icon" type="image/png" href="assets/favicon-bg-removed.png" />
 </head>
 
 <body>
@@ -362,8 +363,10 @@
   <!-- Top Nav -->
   <nav class="top-nav">
     <div>
-      <div class="logo">IN<span>AI</span></div>
-      <div class="logo-sub">Smart Matching System</div>
+      <a href="index.html" style="display: flex; align-items: center; height: 44px; text-decoration: none;">
+        <img src="assets/logo-dark-bg-removed.png" alt="INAI Logo" style="height: 44px; max-width: 100%; object-fit: contain;" />
+      </a>
+      <div class="logo-sub" style="margin-top: 4px;">Smart Matching System</div>
     </div>
     <a href="index.html" style="color:var(--muted); font-size:13px; text-decoration:none;">← Back to Home</a>
   </nav>
@@ -500,7 +503,7 @@
         <div class="form-section-title">Subjects I'm Strong In</div>
         <div id="strong-skills-container">
           <div class="strong-skill-row" style="display:flex; gap:8px; margin-bottom:8px; align-items:center;">
-            <input type="text" class="skill-subject inai-sel" placeholder="e.g. DSA, Python"
+            <input type="text" class="skill-subject inai-sel" placeholder="e.g. DSA, Python" list="skills-list"
               style="flex:2; padding:11px 14px; background:var(--navy); border:1px solid var(--border); border-radius:10px; color:var(--offwht); font-size:13px; outline:none;" />
             <select class="skill-level"
               style="flex:1; padding:11px 14px; background:var(--navy); border:1px solid var(--border); border-radius:10px; color:var(--offwht); font-size:13px; outline:none; appearance:none;">
@@ -573,9 +576,6 @@
           New here?
           <button type="button" onclick="switchTab('register')" style="background:none; border:none; color:var(--cyan);
             font-size:12px; font-weight:600; cursor:pointer;">Register now</button>
-          <span style="color:var(--border); margin:0 6px;">|</span>
-          <button type="button" onclick="switchTab('forgot')" style="background:none; border:none; color:var(--cyan);
-            font-size:12px; font-weight:600; cursor:pointer;">Forgot password?</button>
         </p>
 
         <!-- Demo quick login -->
@@ -589,42 +589,17 @@
         </div>
       </form>
 
-      <!-- FORGOT PASSWORD FORM -->
-      <form id="forgot-form" onsubmit="handleForgotPassword(event)" style="display:none;" autocomplete="off">
-        <div style="text-align:center; margin-bottom:24px;">
-          <p style="font-size:14px; color:var(--muted);">
-            Reset using your registered name, room number, and state.
-          </p>
-        </div>
-
-        <div class="form-group" style="margin-bottom:14px;">
-          <label class="lbl">Full Name</label>
-          <input type="text" id="reset-name" placeholder="Your registered name" />
-        </div>
-
-        <div class="form-group" style="margin-bottom:14px;">
-          <label class="lbl">Room Number</label>
-          <input type="text" id="reset-room" placeholder="e.g. 101" />
-        </div>
-
-        <div class="form-group" style="margin-bottom:14px;">
-          <label class="lbl">State</label>
-          <input type="text" id="reset-state" placeholder="e.g. Tamil Nadu" />
-        </div>
-
-        <div class="form-group" style="margin-bottom:16px;">
-          <label class="lbl">New Password</label>
-          <input type="password" id="reset-password" placeholder="Create a new password" />
-        </div>
-
-        <button type="submit" class="submit-btn">Reset Password</button>
-
-        <p style="text-align:center; margin-top:14px; font-size:12px; color:var(--muted);">
-          Remembered it?
+      <!-- Password reset is admin-assisted -->
+      <div id="forgot-form" style="display:none; text-align:center; padding:20px 0;">
+        <p style="font-size:14px; color:var(--muted); line-height:1.6;">
+          🔒 Password resets are admin-assisted.<br />
+          Please contact the hostel warden or system administrator to reset your account credentials.
+        </p>
+        <p style="text-align:center; margin-top:16px; font-size:12px; color:var(--muted);">
           <button type="button" onclick="switchTab('login')" style="background:none; border:none; color:var(--cyan);
             font-size:12px; font-weight:600; cursor:pointer;">Back to login</button>
         </p>
-      </form>
+      </div>
 
     </div><!-- /form-card -->
   </div><!-- /main-wrap -->
@@ -639,10 +614,7 @@
     if (existingUser) window.location.href = "dashboard.html";
 
     // Build need-help checkboxes on load
-    document.addEventListener("DOMContentLoaded", async () => {
-      showLoader();
-      await initData();
-      hideLoader();
+    document.addEventListener("DOMContentLoaded", () => {
       buildNeedHelpCheckboxes();
       buildDemoAccounts();
     });

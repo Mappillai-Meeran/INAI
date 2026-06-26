@@ -9,6 +9,7 @@
     href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700;800&family=DM+Sans:wght@400;500;600&display=swap"
     rel="stylesheet" />
   <link rel="stylesheet" href="css/style.css" />
+  <link rel="icon" type="image/png" href="assets/favicon-bg-removed.png" />
 </head>
 
 <body>
@@ -21,13 +22,16 @@
   <script>
     document.addEventListener("DOMContentLoaded", async () => {
       showLoader();
-      await initData();
-      hideLoader();
-      injectBaseStyles();
+      try {
+        await initData();
+      } finally {
+        hideLoader();
+      }
       const user = requireLogin();
       if (!user) return;
 
       const pending = getIncomingRequests(user.id).filter(r => r.status === "pending").length;
+      restorePomodoro();
 
       document.getElementById("app").innerHTML = `
     ${renderNav("dashboard")}
@@ -58,7 +62,7 @@
               color:${user.freeNow ? "var(--green)" : "var(--muted)"};
               border:1px solid ${user.freeNow ? "rgba(16,185,129,0.3)" : "var(--border)"};
               padding:10px 20px; border-radius:10px; font-size:13px; cursor:pointer;">
-            ${user.freeNow ? "🟢 I'm Free Now" : "🔴 I'm Busy"}
+            ${user.freeNow ? "\u{1F7E2} I'm Free Now" : "\u{1F534} I'm Busy"}
           </button>
           <a href="match.html" class="inai-btn inai-btn-primary" style="padding:10px 20px;">
             Find Match →
@@ -79,12 +83,11 @@
             <button id="pomo-start-btn" onclick="startPomodoro()" class="inai-btn" style="background:var(--green); color:#fff; border:none; padding:12px 32px; font-size:14px; font-weight:700; border-radius:12px; cursor:pointer;">Start Focus</button>
             <button id="pomo-reset-btn" onclick="resetPomodoro()" class="inai-btn inai-btn-outline" style="padding:12px 24px; display:none;">Reset</button>
           </div>
-          <button onclick="timeRemaining=3" style="font-size:11px; color:var(--muted); background:transparent; border:none; cursor:pointer; margin-top:16px; text-decoration:underline;">[Viva Cheat: Skip to Break]</button>
         </div>
 
         <!-- Game View (Hidden by default) -->
         <div id="pomo-game-view" style="display:none; text-align:center; z-index:1; width:100%; max-width:400px;">
-          <h3 style="font-size:18px; font-weight:800; color:var(--gold); font-family:'Space Grotesk',sans-serif; margin-bottom:8px;">Brain Break 🎮</h3>
+          <h3 style="font-size:18px; font-weight:800; color:var(--gold); font-family:'Space Grotesk',sans-serif; margin-bottom:8px;">Brain Break &#127918;</h3>
           <p id="pomo-break-timer" style="font-size:14px; font-weight:700; color:var(--white); margin-bottom:4px;">05:00</p>
           <p style="font-size:13px; color:var(--muted); margin-bottom:24px;">You earned a 5-minute break! Play a quick game of Tic-Tac-Toe.</p>
           
@@ -102,23 +105,47 @@
 
       <!-- Stats row -->
       <div class="stats-grid" style="display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:24px;">
-        ${statCard("Total Students", getAllUsers().length, "#00C9E4")}
-        ${statCard("Free Now", getAllUsers().filter(u => u.freeNow && u.id !== user.id).length, "#22C55E")}
+        ${statCard("Hostelmates", getAllUsers().filter(u => u.id !== user.id && (u.hostel||"").trim() === (user.hostel||"").trim()).length, "#00C9E4")}
+        ${statCard("Free Now", getAllUsers().filter(u => u.freeNow && u.id !== user.id && (u.hostel||"").trim() === (user.hostel||"").trim()).length, "#22C55E")}
         ${statCard("Pending Requests", pending, "#F5C542")}
         ${statCard("Connections", getAllRequests().filter(r =>
         r.status === "accepted" && (r.from === user.id || r.to === user.id)).length, "#6C3FC7")}
       </div>
 
+      <!-- Pending Sessions -->
+      <div id="pending-sessions-section" style="display:none; margin-bottom:24px;">
+        <div class="inai-card" style="border:1px solid rgba(99,102,241,0.3);">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+            <h3 style="font-size:14px;font-weight:700;color:var(--violet);font-family:'Space Grotesk',sans-serif;">
+              \u{1F4C5} Pending Study Sessions
+            </h3>
+            <a href="sessions.html" style="font-size:12px;color:var(--cyan);text-decoration:none;font-weight:600;">View all →</a>
+          </div>
+          <div id="pending-sessions-list" style="display:flex;flex-direction:column;gap:10px;"></div>
+        </div>
+      </div>
+
+      <!-- Connection Network Graph -->
+      <div class="inai-card" style="margin-bottom:24px; padding:20px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+          <h3 style="font-size:14px; font-weight:700; color:var(--cyan); font-family:'Space Grotesk',sans-serif;">
+            \u{1F578}\u{FE0F} My Network
+          </h3>
+          <span id="network-count" style="font-size:11px; color:var(--muted);"></span>
+        </div>
+        <canvas id="network-canvas" width="740" height="220" style="width:100%; height:220px; border-radius:8px; background:rgba(0,0,0,0.15); display:block;"></canvas>
+      </div>
+
       <!-- Tabs -->
       <div class="inai-tabs">
         <button class="inai-tab active" id="tab-study" onclick="switchDashTab('study')">
-          🧠 Study Buddies
+          &#129504; Study Buddies
         </button>
         <button class="inai-tab" id="tab-roommate" onclick="switchDashTab('roommate')">
-          🏠 Roommate Finder
+          &#127968; Roommate Finder
         </button>
         <button class="inai-tab" id="tab-connections" onclick="switchDashTab('connections')">
-          🤝 My Connections
+          &#129309; My Connections
         </button>
       </div>
 
@@ -155,18 +182,70 @@
         <div id="connections-list" style="display:flex; flex-direction:column; gap:14px;"></div>
       </div>
 
-    </div>`;
+    </div>
+    
+    <!-- Chat Modal -->
+    <div id="chat-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.75); z-index:10000; align-items:center; justify-content:center; font-family:'Space Grotesk', sans-serif;">
+      <div class="inai-card" style="width:90%; max-width:440px; height:500px; display:flex; flex-direction:column; padding:0; overflow:hidden;">
+        <!-- Header -->
+        <div style="padding:16px 20px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; background:var(--navy);">
+          <div style="display:flex; align-items:center; gap:10px;">
+            <div id="chat-avatar"></div>
+            <div>
+              <h4 id="chat-title" style="font-size:14px; font-weight:700; color:var(--white);"></h4>
+              <span style="font-size:10px; color:var(--green); font-weight:600;">Active Session</span>
+            </div>
+          </div>
+          <button onclick="closeChat()" style="background:transparent; border:none; color:var(--muted); font-size:20px; cursor:pointer;">&times;</button>
+        </div>
+        <!-- Messages -->
+        <div id="chat-messages" style="flex:1; padding:20px; overflow-y:auto; display:flex; flex-direction:column; gap:12px; background:rgba(0,0,0,0.1);"></div>
+        <!-- Input -->
+        <div style="padding:12px 16px; border-top:1px solid var(--border); display:flex; gap:8px; background:var(--navy);">
+          <input type="text" id="chat-input" placeholder="Type a message..." class="inai-input" style="flex:1;" onkeydown="if(event.key==='Enter') sendChatMessage()" />
+          <button onclick="sendChatMessage()" class="inai-btn inai-btn-primary" style="padding:10px 16px;">Send</button>
+        </div>
+      </div>
+    </div>
+    `;
 
-      document.getElementById("study-matches-list").innerHTML = renderSkeleton();
-      document.getElementById("roommate-matches-list").innerHTML = renderSkeleton();
-      document.getElementById("connections-list").innerHTML = renderSkeleton();
-
-      setTimeout(() => {
-        loadStudyMatches(user);
-        loadRoommateMatches(user);
-        loadConnections(user);
-      }, 600);
+      loadStudyMatches(user);
+      loadRoommateMatches(user);
+      loadConnections(user);
+      loadPendingSessions(user);
+      drawNetworkGraph(user);
     });
+
+    async function loadPendingSessions(user) {
+      const section = document.getElementById("pending-sessions-section");
+      const list = document.getElementById("pending-sessions-list");
+      if (!section || !list) return;
+      const sessions = await fetchMySessions();
+      const pending = sessions.filter(s =>
+        (s.status === "pending" && s.targetId === user.id) ||
+        (s.status === "confirmed")
+      ).slice(0, 5);
+      if (pending.length === 0) {
+        section.style.display = "none";
+        return;
+      }
+      section.style.display = "block";
+      list.innerHTML = pending.map(s => {
+        const isProposer = s.proposerId === user.id;
+        const otherName = isProposer ? s.targetName : s.proposerName;
+        const timeStr = s.proposedTime
+          ? new Date(s.proposedTime).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
+          : "Flexible";
+        const statusLabel = s.status === "pending" && !isProposer ? "Needs your confirm" : s.status;
+        return `<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;background:rgba(255,255,255,0.02);border-radius:8px;border:1px solid var(--border);">
+          <div>
+            <p style="font-size:13px;font-weight:700;color:var(--white);">${sanitize(s.subject)}</p>
+            <p style="font-size:11px;color:var(--muted);">with ${sanitize(otherName)} · ${timeStr}</p>
+          </div>
+          <span style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--violet);">${statusLabel}</span>
+        </div>`;
+      }).join("");
+    }
 
     function renderSkeleton() {
       return Array(3).fill(0).map(() => `
@@ -203,8 +282,15 @@
     }
 
     function loadStudyMatches(user) {
-      const matches = getPreferenceMatches(user).slice(0, 4);
       const container = document.getElementById("study-matches-list");
+      if (typeof isBackendDown === "function" && isBackendDown()) {
+        container.innerHTML = `<div class="inai-empty" style="text-align:center; padding:40px 20px; border: 1px dashed var(--red); background: rgba(239, 68, 68, 0.05); border-radius: 12px;">
+          <div style="color:var(--red); font-size:32px; margin-bottom:12px;">\u{26A0}\u{FE0F}</div>
+          <p style="color:var(--red); font-weight:700;">Connection Offline</p>
+          <p style="color:var(--muted); font-size:12px; margin-top:4px;">Unable to load study matches. Please check if the backend is running.</p></div>`;
+        return;
+      }
+      const matches = getPreferenceMatches(user).slice(0, 4);
       if (matches.length === 0) {
         container.innerHTML = `<div class="inai-empty" style="text-align:center; padding:40px 20px;">
       <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:16px;">
@@ -216,12 +302,19 @@
       <p style="color:var(--muted); font-size:14px;">No matches found yet. More students will join soon!</p></div>`;
         return;
       }
-      container.innerHTML = matches.map(m => renderMatchCard(m, user, "preference")).join("");
+      container.innerHTML = matches.map((m, i) => renderMatchCard(m, user, "preference", i * 0.06)).join("");
     }
 
     function loadRoommateMatches(user) {
-      const matches = getRoommateMatches(user).slice(0, 4);
       const container = document.getElementById("roommate-matches-list");
+      if (typeof isBackendDown === "function" && isBackendDown()) {
+        container.innerHTML = `<div class="inai-empty" style="text-align:center; padding:40px 20px; border: 1px dashed var(--red); background: rgba(239, 68, 68, 0.05); border-radius: 12px;">
+          <div style="color:var(--red); font-size:32px; margin-bottom:12px;">\u{26A0}\u{FE0F}</div>
+          <p style="color:var(--red); font-weight:700;">Connection Offline</p>
+          <p style="color:var(--muted); font-size:12px; margin-top:4px;">Unable to load roommate matches. Please check if the backend is running.</p></div>`;
+        return;
+      }
+      const matches = getRoommateMatches(user).slice(0, 4);
       if (matches.length === 0) {
         container.innerHTML = `<div class="inai-empty" style="text-align:center; padding:40px 20px;">
       <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:16px;">
@@ -231,14 +324,21 @@
       <p style="color:var(--muted); font-size:14px;">No roommate matches found yet.</p></div>`;
         return;
       }
-      container.innerHTML = matches.map(m => renderMatchCard(m, user, "roommate")).join("");
+      container.innerHTML = matches.map((m, i) => renderMatchCard(m, user, "roommate", i * 0.06)).join("");
     }
 
     function loadConnections(user) {
+      const container = document.getElementById("connections-list");
+      if (typeof isBackendDown === "function" && isBackendDown()) {
+        container.innerHTML = `<div class="inai-empty" style="text-align:center; padding:40px 20px; border: 1px dashed var(--red); background: rgba(239, 68, 68, 0.05); border-radius: 12px;">
+          <div style="color:var(--red); font-size:32px; margin-bottom:12px;">\u{26A0}\u{FE0F}</div>
+          <p style="color:var(--red); font-weight:700;">Connection Offline</p>
+          <p style="color:var(--muted); font-size:12px; margin-top:4px;">Unable to load connections. Please check if the backend is running.</p></div>`;
+        return;
+      }
       const connected = getAllRequests()
         .filter(r => r.status === "accepted" &&
           (r.from === user.id || r.to === user.id));
-      const container = document.getElementById("connections-list");
       if (connected.length === 0) {
         container.innerHTML = `<div class="inai-empty" style="text-align:center; padding:40px 20px;">
       <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="var(--violet)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:16px;">
@@ -254,32 +354,64 @@
         const otherId = req.from === user.id ? req.to : req.from;
         const other = getUserById(otherId);
         if (!other) return "";
-        return `<div class="inai-card" style="display:flex;align-items:center;gap:14px;">
-      ${renderAvatar(other.name, 44)}
-      <div style="flex:1;">
-        <h4 style="font-size:14px;font-weight:700;color:var(--white);
-          font-family:'Space Grotesk',sans-serif;">${other.name}</h4>
-        <p style="font-size:12px;color:var(--muted);">${other.year} · ${other.branch}</p>
-        <p style="font-size:12px;color:var(--green);margin-top:3px;">
-          🔓 Room ${other.room}, Block ${other.block}
-        </p>
+        return `<div class="inai-card" style="display:flex;flex-direction:column;gap:14px;align-items:stretch;">
+      <div style="display:flex;align-items:center;gap:14px;">
+        ${renderAvatar(other.name, 44)}
+        <div style="flex:1;">
+          <h4 style="font-size:14px;font-weight:700;color:var(--white);
+            font-family:'Space Grotesk',sans-serif;">${sanitize(other.name)}</h4>
+          <p style="font-size:12px;color:var(--muted);">${sanitize(other.year)} · ${sanitize(other.branch)}</p>
+          <p style="font-size:12px;color:var(--green);margin-top:3px;">
+            \u{1F513} Room ${sanitize(other.room)}, Block ${sanitize(other.block)}
+          </p>
+        </div>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <button onclick="openChat('${req.id}', '${other.id}')" class="inai-btn inai-btn-primary" style="padding:6px 14px; font-size:12px;">\u{1F4AC} Chat</button>
+          <span style="color:var(--green);font-size:12px;font-weight:700;
+            background:#14532d;border:1px solid #22C55E;
+            padding:6px 14px;border-radius:8px; display:inline-block;">\u{2713} Connected</span>
+          <button onclick="disconnectUser('${req.id}')" style="background:transparent; border:1px solid var(--red); color:var(--red); padding:6px 10px; border-radius:8px; font-size:11px; font-weight:700; cursor:pointer;">Remove</button>
+        </div>
       </div>
-      <div style="display:flex; align-items:center; gap:8px;">
-        <span style="color:var(--green);font-size:12px;font-weight:700;
-          background:#14532d;border:1px solid #22C55E;
-          padding:6px 14px;border-radius:8px;">✓ Connected</span>
-        <button onclick="disconnectUser('${req.id}')" style="background:transparent; border:1px solid var(--red); color:var(--red); padding:6px 10px; border-radius:8px; font-size:11px; font-weight:700; cursor:pointer;">Remove</button>
+      
+      <!-- Proximity Map -->
+      <div class="hostel-floor-map" style="background:rgba(0,0,0,0.2); padding:12px; border-radius:10px; border:1px solid var(--border);">
+        <p style="font-size:11px; color:var(--muted); font-weight:700; text-transform:uppercase; margin-bottom:8px; display:flex; justify-content:space-between;">
+          <span>Hostel Floor Map — Block ${sanitize(other.block)}</span>
+          <span style="color:var(--green);">Connected Proximity</span>
+        </p>
+        <div style="display:grid; grid-template-columns:repeat(8, 1fr); gap:6px;">
+          ${renderFloorGrid(user.room, other.room)}
+        </div>
       </div>
     </div>`;
       }).join("");
     }
 
-    function toggleFreeNow() {
+    async function toggleFreeNow() {
       const user = getSession();
       const updated = !user.freeNow;
-      updateUser(user.id, { freeNow: updated });
-      showToast(updated ? "You are now visible as Free!" : "Status set to Busy", "success");
-      setTimeout(() => window.location.reload(), 600);
+      const success = await updateUser(user.id, { freeNow: updated });
+      if (success) {
+        showToast(updated ? "You are now visible as Free!" : "Status set to Busy", "success");
+        const freshUser = getSession();
+        const statusButton = document.querySelector("button[onclick='toggleFreeNow()']");
+        if (statusButton && freshUser) {
+          statusButton.textContent = freshUser.freeNow ? "\u{1F7E2} I'm Free Now" : "\u{1F534} I'm Busy";
+          statusButton.style.background = freshUser.freeNow ? "rgba(16, 185, 129, 0.1)" : "rgba(255,255,255,0.05)";
+          statusButton.style.color = freshUser.freeNow ? "var(--green)" : "var(--muted)";
+          statusButton.style.borderColor = freshUser.freeNow ? "rgba(16,185,129,0.3)" : "var(--border)";
+        }
+        const navBtn = document.getElementById("nav-free-toggle");
+        if (navBtn && freshUser) {
+          navBtn.textContent = freshUser.freeNow ? "🟢 Free" : "🔴 Busy";
+          navBtn.style.background = freshUser.freeNow ? "rgba(16,185,129,0.12)" : "rgba(255,255,255,0.04)";
+          navBtn.style.color = freshUser.freeNow ? "var(--green)" : "var(--muted)";
+          navBtn.style.borderColor = freshUser.freeNow ? "rgba(16,185,129,0.35)" : "var(--border)";
+        }
+      } else {
+        showToast("Failed to update status", "error");
+      }
     }
 
     // --- POMODORO & GAME LOGIC ---
@@ -287,52 +419,73 @@
     let timeRemaining = 25 * 60; // 25 mins
     let isBreak = false;
 
+    function runTick() {
+      const stateStr = sessionStorage.getItem("inai_pomo_state");
+      if (!stateStr) return;
+      const state = JSON.parse(stateStr);
+      
+      const elapsedSeconds = Math.floor((Date.now() - state.startedAt) / 1000);
+      timeRemaining = state.timeRemaining - elapsedSeconds;
+      
+      if (timeRemaining <= 0) {
+        clearInterval(pomoInterval);
+        if (!state.isBreak) {
+          isBreak = true;
+          timeRemaining = 5 * 60;
+          showToast("Focus complete! Time for a Brain Break 🎮", "success");
+          document.getElementById('pomo-timer-view').style.display = 'none';
+          document.getElementById('pomo-game-view').style.display = 'block';
+          
+          sessionStorage.setItem("inai_pomo_state", JSON.stringify({
+            timeRemaining: timeRemaining,
+            isBreak: true,
+            startedAt: Date.now(),
+            running: true
+          }));
+          updateBreakTimerDisplay();
+          resetGame();
+          
+          pomoInterval = setInterval(runTick, 1000);
+        } else {
+          resetPomodoro();
+          showToast("Break over! Ready to focus again?", "info");
+        }
+      } else {
+        if (state.isBreak) {
+          updateBreakTimerDisplay();
+        } else {
+          updateTimerDisplay();
+        }
+      }
+    }
+
     function startPomodoro() {
       document.getElementById('pomo-start-btn').style.display = 'none';
       document.getElementById('pomo-reset-btn').style.display = 'block';
       document.getElementById('pomo-status').textContent = "Stay focused! You got this.";
       
-      clearInterval(pomoInterval);
-      pomoInterval = setInterval(() => {
-        timeRemaining--;
-        updateTimerDisplay();
+      sessionStorage.setItem("inai_pomo_state", JSON.stringify({
+        timeRemaining: timeRemaining,
+        isBreak: isBreak,
+        startedAt: Date.now(),
+        running: true
+      }));
 
-        if (timeRemaining <= 0) {
-          clearInterval(pomoInterval);
-          if (!isBreak) {
-            // Enter break mode
-            isBreak = true;
-            timeRemaining = 5 * 60;
-            showToast("Focus complete! Time for a Brain Break 🎮", "success");
-            document.getElementById('pomo-timer-view').style.display = 'none';
-            document.getElementById('pomo-game-view').style.display = 'block';
-            updateBreakTimerDisplay();
-            resetGame();
-            
-            // Auto start break timer
-            pomoInterval = setInterval(() => {
-              timeRemaining--;
-              updateBreakTimerDisplay();
-              if (timeRemaining <= 0) {
-                clearInterval(pomoInterval);
-                resetPomodoro();
-                showToast("Break over! Ready to focus again?", "info");
-              }
-            }, 1000);
-          }
-        }
-      }, 1000);
+      clearInterval(pomoInterval);
+      pomoInterval = setInterval(runTick, 1000);
     }
 
     function updateTimerDisplay() {
-      const m = Math.floor(timeRemaining / 60).toString().padStart(2, '0');
-      const s = (timeRemaining % 60).toString().padStart(2, '0');
+      const displayTime = Math.max(0, timeRemaining);
+      const m = Math.floor(displayTime / 60).toString().padStart(2, '0');
+      const s = (displayTime % 60).toString().padStart(2, '0');
       document.getElementById('pomo-time').textContent = `${m}:${s}`;
     }
 
     function updateBreakTimerDisplay() {
-      const m = Math.floor(timeRemaining / 60).toString().padStart(2, '0');
-      const s = (timeRemaining % 60).toString().padStart(2, '0');
+      const displayTime = Math.max(0, timeRemaining);
+      const m = Math.floor(displayTime / 60).toString().padStart(2, '0');
+      const s = (displayTime % 60).toString().padStart(2, '0');
       document.getElementById('pomo-break-timer').textContent = `Break Time Left: ${m}:${s}`;
     }
 
@@ -341,11 +494,56 @@
       isBreak = false;
       timeRemaining = 25 * 60;
       updateTimerDisplay();
+      sessionStorage.removeItem("inai_pomo_state");
       document.getElementById('pomo-start-btn').style.display = 'block';
       document.getElementById('pomo-reset-btn').style.display = 'none';
       document.getElementById('pomo-status').textContent = "Ready to study? Start a 25-minute focus timer.";
       document.getElementById('pomo-timer-view').style.display = 'block';
       document.getElementById('pomo-game-view').style.display = 'none';
+    }
+
+    function restorePomodoro() {
+      const stateStr = sessionStorage.getItem("inai_pomo_state");
+      if (!stateStr) return;
+      const state = JSON.parse(stateStr);
+      if (!state.running) return;
+
+      isBreak = state.isBreak;
+      const elapsedSeconds = Math.floor((Date.now() - state.startedAt) / 1000);
+      timeRemaining = state.timeRemaining - elapsedSeconds;
+
+      if (timeRemaining <= 0) {
+        if (!isBreak) {
+          isBreak = true;
+          timeRemaining = 5 * 60;
+          sessionStorage.setItem("inai_pomo_state", JSON.stringify({
+            timeRemaining: timeRemaining,
+            isBreak: true,
+            startedAt: Date.now(),
+            running: true
+          }));
+          document.getElementById('pomo-timer-view').style.display = 'none';
+          document.getElementById('pomo-game-view').style.display = 'block';
+          updateBreakTimerDisplay();
+          resetGame();
+          pomoInterval = setInterval(runTick, 1000);
+        } else {
+          resetPomodoro();
+        }
+      } else {
+        document.getElementById('pomo-start-btn').style.display = 'none';
+        document.getElementById('pomo-reset-btn').style.display = 'block';
+        if (isBreak) {
+          document.getElementById('pomo-timer-view').style.display = 'none';
+          document.getElementById('pomo-game-view').style.display = 'block';
+          updateBreakTimerDisplay();
+          resetGame();
+        } else {
+          document.getElementById('pomo-status').textContent = "Stay focused! You got this.";
+          updateTimerDisplay();
+        }
+        pomoInterval = setInterval(runTick, 1000);
+      }
     }
 
     // --- TIC TAC TOE LOGIC ---
@@ -393,14 +591,14 @@
       for (let i = 0; i < winConditions.length; i++) {
         const [a, b, c] = winConditions[i];
         if (board[a] && board[a] === board[b] && board[a] === board[c]) {
-          document.getElementById('ttt-status').textContent = `${board[a] === "X" ? "You Win!" : "AI Wins!"} 🎉`;
+          document.getElementById('ttt-status').textContent = `${board[a] === "X" ? "You Win!" : "AI Wins!"} \u{1F389}`;
           gameActive = false;
           return;
         }
       }
 
       if (!board.includes("")) {
-        document.getElementById('ttt-status').textContent = "It's a Draw! 🤝";
+        document.getElementById('ttt-status').textContent = "It's a Draw! \u{1F91D}";
         gameActive = false;
       } else {
         document.getElementById('ttt-status').textContent = "Your turn (X)";
@@ -412,6 +610,244 @@
       gameActive = true;
       document.getElementById('ttt-status').textContent = "Your turn (X)";
       updateBoard();
+    }
+
+    // --- PREMIUM HOSTEL PROXIMITY FLOOR MAP ---
+    function renderFloorGrid(userRoom, otherRoom) {
+      const userNum = parseInt(String(userRoom).replace(/\D/g, '')) || 101;
+      const otherNum = parseInt(String(otherRoom).replace(/\D/g, '')) || 105;
+      const minRoom = Math.min(userNum, otherNum) - 2;
+      
+      let html = "";
+      for (let i = 0; i < 8; i++) {
+        const currentRoom = minRoom + i;
+        const isUser = currentRoom === userNum;
+        const isOther = currentRoom === otherNum;
+        
+        let bg = "rgba(255,255,255,0.03)";
+        let border = "1px solid var(--border)";
+        let label = `${currentRoom}`;
+        let textColor = "var(--muted)";
+        
+        if (isUser) {
+          bg = "rgba(99, 102, 241, 0.2)";
+          border = "1.5px solid var(--violet)";
+          label = "YOU";
+          textColor = "var(--violet)";
+        } else if (isOther) {
+          bg = "rgba(16, 185, 129, 0.2)";
+          border = "1.5px solid var(--green)";
+          label = "MATCH";
+          textColor = "var(--green)";
+        }
+        
+        html += `
+          <div style="
+            background:${bg}; border:${border}; border-radius:6px;
+            aspect-ratio:1.2; display:flex; flex-direction:column;
+            align-items:center; justify-content:center; font-size:9px;
+            font-weight:700; color:${textColor}; padding:2px;
+          ">
+            <span style="font-size:7px; opacity:0.6; display:block;">${currentRoom}</span>
+            ${label}
+          </div>
+        `;
+      }
+      return html;
+    }
+
+    // --- CONNECTION NETWORK GRAPH ---
+    function drawNetworkGraph(currentUser) {
+      const canvas = document.getElementById("network-canvas");
+      if (!canvas) return;
+      const rect = canvas.parentElement.getBoundingClientRect();
+      canvas.width = Math.max(400, rect.width - 40);
+      canvas.height = 220;
+      const ctx = canvas.getContext("2d");
+      const W = canvas.width, H = canvas.height;
+
+      const connectedReqs = getAllRequests().filter(r =>
+        r.status === "accepted" && (r.from === currentUser.id || r.to === currentUser.id)
+      );
+      document.getElementById("network-count").textContent = connectedReqs.length + " connection" + (connectedReqs.length !== 1 ? "s" : "");
+
+      if (connectedReqs.length === 0) {
+        ctx.fillStyle = "rgba(148,163,184,0.5)";
+        ctx.font = "13px 'Space Grotesk', sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText("No connections yet. Start matching!", W/2, H/2);
+        return;
+      }
+
+      const nodes = [{ id: currentUser.id, label: "You", x: W/2, y: H/2, r: 22, color: "#6C3FC7" }];
+      const angleStep = (2 * Math.PI) / connectedReqs.length;
+      const radius = Math.min(W * 0.32, 130);
+
+      connectedReqs.forEach((req, i) => {
+        const otherId = req.from === currentUser.id ? req.to : req.from;
+        const otherUser = getUserById(otherId);
+        if (!otherUser) return;
+        const angle = angleStep * i - Math.PI / 2;
+        nodes.push({
+          id: otherId,
+          label: otherUser.name.split(" ")[0],
+          x: W/2 + Math.cos(angle) * radius,
+          y: H/2 + Math.sin(angle) * radius,
+          r: 16,
+          color: "#22C55E"
+        });
+      });
+
+      ctx.clearRect(0, 0, W, H);
+
+      // Draw edges (connection lines)
+      nodes.forEach((n, i) => {
+        if (i === 0) return;
+        ctx.beginPath();
+        ctx.moveTo(nodes[0].x, nodes[0].y);
+        ctx.lineTo(n.x, n.y);
+        ctx.strokeStyle = "rgba(99,102,241,0.2)";
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+      });
+
+      // Draw glow on center node
+      const glow = ctx.createRadialGradient(nodes[0].x, nodes[0].y, 5, nodes[0].x, nodes[0].y, nodes[0].r + 14);
+      glow.addColorStop(0, "rgba(108,63,199,0.2)");
+      glow.addColorStop(1, "rgba(108,63,199,0)");
+      ctx.beginPath();
+      ctx.arc(nodes[0].x, nodes[0].y, nodes[0].r + 14, 0, Math.PI * 2);
+      ctx.fillStyle = glow;
+      ctx.fill();
+
+      // Draw nodes
+      nodes.forEach((n, i) => {
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2);
+        const grad = ctx.createRadialGradient(n.x - 3, n.y - 3, 2, n.x, n.y, n.r);
+        grad.addColorStop(0, i === 0 ? "#8B5CF6" : "#34D399");
+        grad.addColorStop(1, n.color);
+        ctx.fillStyle = grad;
+        ctx.fill();
+        ctx.strokeStyle = i === 0 ? "rgba(255,255,255,0.3)" : "rgba(255,255,255,0.1)";
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        // Label
+        ctx.fillStyle = "#fff";
+        ctx.font = "bold 10px 'Space Grotesk', sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "bottom";
+        ctx.fillText(n.label, n.x, n.y - n.r - 4);
+      });
+    }
+
+    // --- PREMIUM SIMULATED CHAT LOGIC ---
+    let currentChatRequestId = null;
+    let currentChatOtherUser = null;
+    let chatInterval = null;
+
+    function openChat(requestId, otherUserId) {
+      const otherUser = getUserById(otherUserId);
+      if (!otherUser) return;
+      currentChatRequestId = requestId;
+      currentChatOtherUser = otherUser;
+      
+      document.getElementById("chat-title").textContent = otherUser.name;
+      document.getElementById("chat-avatar").innerHTML = renderAvatar(otherUser.name, 32);
+      
+      const modal = document.getElementById("chat-modal");
+      modal.style.display = "flex";
+      
+      loadChatHistory(requestId);
+      
+      // Poll every 2 seconds for real-time chat updates
+      clearInterval(chatInterval);
+      chatInterval = setInterval(() => {
+        loadChatHistory(requestId);
+      }, 2000);
+    }
+
+    function closeChat() {
+      document.getElementById("chat-modal").style.display = "none";
+      clearInterval(chatInterval);
+    }
+
+    async function loadChatHistory(requestId) {
+      if (currentChatRequestId !== requestId) return;
+      const messagesContainer = document.getElementById("chat-messages");
+      
+      try {
+        const token = sessionStorage.getItem("inai_user_token") || "";
+        const response = await fetch(`${API_BASE}/chat/${requestId}`, {
+          headers: { "Authorization": "Bearer " + token }
+        });
+        if (!response.ok) return;
+        let messages = await response.json();
+        
+        if (messages.length === 0) {
+          messagesContainer.innerHTML = `<div style="text-align:center;color:var(--muted);font-size:12.5px;padding:20px;font-family:'DM Sans', sans-serif;">No messages yet. Say hello to start the conversation!</div>`;
+          return;
+        }
+        
+        const html = messages.map(msg => {
+          const isMe = msg.sender !== currentChatOtherUser.id;
+          const bg = isMe ? "var(--violet)" : "var(--indigo)";
+          const align = isMe ? "flex-end" : "flex-start";
+          const color = isMe ? "#fff" : "var(--offwht)";
+          return `
+            <div style="align-self:${align}; max-width:75%; background:${bg}; color:${color}; padding:8px 14px; border-radius:12px; font-size:12.5px; font-family:'DM Sans', sans-serif; border: 1px solid var(--border);">
+              <p style="margin:0;">${sanitize(msg.text)}</p>
+              <span style="font-size:8px; opacity:0.6; display:block; text-align:right; margin-top:2px;">
+                ${new Date(msg.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+              </span>
+            </div>
+          `;
+        }).join("");
+        
+        const isAtBottom = messagesContainer.scrollHeight - messagesContainer.scrollTop - messagesContainer.clientHeight < 40;
+        
+        if (messagesContainer.innerHTML !== html) {
+          messagesContainer.innerHTML = html;
+          if (isAtBottom || messagesContainer.innerHTML === "") {
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+          }
+        }
+      } catch (err) {
+        console.warn("Failed to load chat history", err);
+      }
+    }
+
+    async function sendChatMessage() {
+      const input = document.getElementById("chat-input");
+      const text = input.value.trim();
+      if (!text || !currentChatRequestId) return;
+      
+      const token = sessionStorage.getItem("inai_user_token") || "";
+      const requestId = currentChatRequestId;
+      
+      input.value = "";
+      
+      try {
+        // Save my message to MongoDB
+        const res = await fetch(`${API_BASE}/chat`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + token
+          },
+          body: JSON.stringify({
+            requestId,
+            text: text
+          })
+        });
+        
+        if (res.ok) {
+          await loadChatHistory(requestId);
+        }
+      } catch (err) {
+        showToast("Failed to send message", "error");
+      }
     }
   </script>
 </body>

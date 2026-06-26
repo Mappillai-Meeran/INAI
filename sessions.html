@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>INAI — Study Sessions</title>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700;800&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+  <link rel="icon" type="image/png" href="assets/favicon-bg-removed.png" />
+</head>
+<body>
+  <div id="app"></div>
+
+  <script src="js/data.js"></script>
+  <script src="js/utils.js"></script>
+  <script>
+    document.addEventListener("DOMContentLoaded", async () => {
+      showLoader();
+      try { await initData(); } finally { hideLoader(); }
+      const user = requireLogin();
+      if (!user) return;
+      renderSessionsPage(user);
+    });
+
+    function renderSessionsPage(user) {
+      document.getElementById("app").innerHTML = `
+    ${renderNav("sessions")}
+    <div class="inai-page" style="max-width:800px;">
+
+      <div style="margin-bottom:20px;">
+        <h2 class="inai-section-title" style="font-size:24px;">\u{1F4C5} Study Sessions</h2>
+        <p class="inai-section-sub">Propose and manage study sessions with your connections.</p>
+      </div>
+
+      <!-- Propose Session inline -->
+      <div class="inai-card" style="margin-bottom:24px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; cursor:pointer;" onclick="toggleSessForm()">
+          <h3 style="font-size:15px;font-weight:700;color:var(--cyan);font-family:'Space Grotesk',sans-serif;">
+            \u{2795} Propose Session
+          </h3>
+          <span id="sess-toggle-icon" style="color:var(--muted);font-size:18px;">+</span>
+        </div>
+        <div id="sess-form" style="display:none;">
+          <div id="sess-no-connections" style="display:none;
+            padding:16px; background:rgba(239,68,68,0.07); border:1px dashed var(--red);
+            border-radius:10px; margin-bottom:16px; font-size:13px; color:var(--muted); text-align:center;">
+            ⚠️ You have no connections yet.<br/>
+            <a href="requests.html" style="color:var(--cyan);text-decoration:underline;">Accept a request first</a> before proposing a session.
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <div style="grid-column:1/-1;">
+              <label class="inai-label">Study with</label>
+              <select id="sess-target" class="inai-select" style="width:100%;">
+                <option value="" disabled selected>Select a connection...</option>
+              </select>
+            </div>
+            <div>
+              <label class="inai-label">Subject</label>
+              <input type="text" id="sess-subject" class="inai-input" placeholder="e.g. DSA" />
+            </div>
+            <div>
+              <label class="inai-label">Date &amp; Time</label>
+              <input type="datetime-local" id="sess-time" class="inai-input" />
+            </div>
+            <div>
+              <label class="inai-label">Location</label>
+              <input type="text" id="sess-location" class="inai-input" placeholder="e.g. Library Room 3" />
+            </div>
+            <div style="grid-column:1/-1;">
+              <label class="inai-label">Notes (optional)</label>
+              <input type="text" id="sess-notes" class="inai-input" placeholder="What to study..." />
+            </div>
+          </div>
+          <button onclick="proposeSession()" class="inai-btn inai-btn-primary" style="margin-top:16px;width:100%;padding:12px;font-size:14px;">
+            📅 Propose Session
+          </button>
+        </div>
+      </div>
+
+      <!-- Sessions list -->
+      <h3 class="inai-section-title" style="font-size:16px;">Your Sessions</h3>
+      <div id="sessions-list" style="display:flex;flex-direction:column;gap:14px;">
+        <div style="text-align:center;padding:40px;color:var(--muted);font-size:13px;">Loading sessions...</div>
+      </div>
+    </div>`;
+      loadSessions(user);
+    }
+
+    function toggleSessForm() {
+      const form = document.getElementById("sess-form");
+      const icon = document.getElementById("sess-toggle-icon");
+      const isHidden = form.style.display === "none" || form.style.display === "";
+      if (isHidden) populateConnectionsDropdown();
+      form.style.display = isHidden ? "block" : "none";
+      icon.textContent = isHidden ? "\u{2212}" : "+";
+    }
+
+    function populateConnectionsDropdown() {
+      const user = getSession();
+      if (!user) return;
+
+      // Find all accepted connections (both directions)
+      const allRequests = getAllRequests();
+      const connectedIds = allRequests
+        .filter(r => r.status === "accepted" && (r.from === user.id || r.to === user.id))
+        .map(r => r.from === user.id ? r.to : r.from);
+
+      const select = document.getElementById("sess-target");
+      const noConnEl = document.getElementById("sess-no-connections");
+
+      if (connectedIds.length === 0) {
+        noConnEl.style.display = "block";
+        select.parentElement.style.display = "none";
+        return;
+      }
+
+      noConnEl.style.display = "none";
+      select.parentElement.style.display = "block";
+
+      // Build dropdown options with real names
+      select.innerHTML = `<option value="" disabled selected>Select a connection...</option>`;
+      connectedIds.forEach(id => {
+        const u = getUserById(id);
+        if (u) {
+          const opt = document.createElement("option");
+          opt.value = u.id;
+          opt.textContent = `${u.name} [${u.id}] — ${u.year}, ${u.branch}`;
+          select.appendChild(opt);
+        }
+      });
+    }
+
+    async function proposeSession() {
+      const targetId = document.getElementById("sess-target")?.value;
+      const subject = document.getElementById("sess-subject")?.value.trim();
+      const timeInput = document.getElementById("sess-time")?.value;
+      const location = document.getElementById("sess-location")?.value.trim();
+      const notes = document.getElementById("sess-notes")?.value.trim();
+      if (!targetId) return showToast("Please select a connection.", "error");
+      if (!subject) return showToast("Subject is required.", "error");
+      const proposedTime = timeInput ? new Date(timeInput).getTime() : null;
+      const result = await createStudySession({ targetId, subject, proposedTime, proposedLocation: location, notes });
+      if (result.success) {
+        showToast("Session proposed! ✅", "success");
+        toggleSessForm();
+        document.getElementById("sess-target").value = "";
+        document.getElementById("sess-subject").value = "";
+        document.getElementById("sess-time").value = "";
+        document.getElementById("sess-location").value = "";
+        document.getElementById("sess-notes").value = "";
+        const user = getSession();
+        loadSessions(user);
+      } else {
+        showToast(result.message || "Failed to propose session.", "error");
+      }
+    }
+
+    async function loadSessions(user) {
+      const container = document.getElementById("sessions-list");
+      const sessions = await fetchMySessions();
+      if (sessions.length === 0) {
+        container.innerHTML = `<div class="inai-empty" style="text-align:center;padding:48px 20px;">
+          <div class="inai-empty-icon">\u{1F4C5}</div>
+          <p style="color:var(--muted);">No study sessions yet.</p>
+        </div>`;
+        return;
+      }
+      container.innerHTML = sessions.map(s => {
+        const isProposer = s.proposerId === user.id;
+        const otherName = isProposer ? s.targetName : s.proposerName;
+        const timeStr = s.proposedTime
+          ? new Date(s.proposedTime).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
+          : "Flexible";
+        const statusColors = {
+          pending: "rgba(234,179,8,0.15)",
+          confirmed: "rgba(34,197,94,0.15)",
+          declined: "rgba(239,68,68,0.15)",
+          completed: "rgba(107,114,128,0.15)"
+        };
+        const statusTextColors = {
+          pending: "var(--yellow)",
+          confirmed: "var(--green)",
+          declined: "var(--red)",
+          completed: "var(--muted)"
+        };
+
+        let actionBtns = "";
+        if (s.status === "pending") {
+          if (!isProposer) {
+            actionBtns = `
+              <button onclick="handleConfirm('${s.id}')" class="inai-btn" style="background:rgba(34,197,94,0.15);color:var(--green);border:none;padding:6px 14px;font-size:11px;font-weight:700;border-radius:8px;cursor:pointer;">Confirm</button>
+              <button onclick="handleDecline('${s.id}')" class="inai-btn" style="background:rgba(239,68,68,0.15);color:var(--red);border:none;padding:6px 14px;font-size:11px;font-weight:700;border-radius:8px;cursor:pointer;">Decline</button>`;
+          } else {
+            actionBtns = `<button onclick="handleDecline('${s.id}')" class="inai-btn" style="background:rgba(239,68,68,0.15);color:var(--red);border:none;padding:6px 14px;font-size:11px;font-weight:700;border-radius:8px;cursor:pointer;">Cancel</button>`;
+          }
+        } else if (s.status === "confirmed") {
+          actionBtns = `<button onclick="handleComplete('${s.id}')" class="inai-btn" style="background:rgba(99,102,241,0.15);color:var(--violet);border:none;padding:6px 14px;font-size:11px;font-weight:700;border-radius:8px;cursor:pointer;">Mark Complete</button>`;
+        }
+
+        const label = isProposer ? "You proposed" : "Proposed to you";
+        return `<div class="inai-card" style="display:flex;flex-direction:column;gap:10px;">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">
+            <div style="flex:1;">
+              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                <h4 style="font-size:14px;font-weight:700;color:var(--white);font-family:'Space Grotesk',sans-serif;">${sanitize(s.subject)}</h4>
+                <span style="font-size:10px;background:${statusColors[s.status] || statusColors.pending};color:${statusTextColors[s.status] || statusTextColors.pending};padding:2px 10px;border-radius:10px;font-weight:700;text-transform:uppercase;">${s.status}</span>
+              </div>
+              <p style="font-size:12px;color:var(--muted);margin-top:4px;">
+                ${label} \u{00B7} with <strong style="color:var(--offwht);">${sanitize(otherName)}</strong>
+              </p>
+              <p style="font-size:12px;color:var(--muted);">
+                ${s.proposedLocation ? sanitize(s.proposedLocation) + " \u{00B7} " : ""}\u{1F552} ${timeStr}
+                ${s.notes ? "<br>\u{1F4DD} " + sanitize(s.notes) : ""}
+              </p>
+            </div>
+            <div style="display:flex;gap:6px;flex-shrink:0;">${actionBtns}</div>
+          </div>
+        </div>`;
+      }).join("");
+    }
+
+    async function handleConfirm(id) {
+      const result = await confirmSession(id);
+      if (result.success) {
+        showToast("Session confirmed!", "success");
+        const user = getSession();
+        loadSessions(user);
+      } else {
+        showToast(result.message || "Failed to confirm.", "error");
+      }
+    }
+
+    async function handleDecline(id) {
+      const result = await declineSession(id);
+      if (result.success) {
+        showToast("Session cancelled.", "info");
+        const user = getSession();
+        loadSessions(user);
+      } else {
+        showToast(result.message || "Failed to cancel.", "error");
+      }
+    }
+
+    function handleComplete(sessionId) {
+      const user = getSession();
+      const s = SESSIONS_CACHE.find(x => x.id === sessionId);
+      const partnerName = s ? (s.proposerId === user.id ? s.targetName : s.proposerName) : "your partner";
+      showRatingModal(sessionId, partnerName);
+    }
+
+    function showRatingModal(sessionId, partnerName) {
+      const overlay = document.createElement("div");
+      overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.75);display:flex;align-items:center;justify-content:center;z-index:9999;";
+      overlay.innerHTML = `
+        <div class="inai-card" style="max-width:360px;width:90%;text-align:center;padding:28px;">
+          <h3 style="font-size:16px;font-weight:700;color:var(--white);margin-bottom:8px;">Session Complete</h3>
+          <p style="font-size:13px;color:var(--muted);margin-bottom:20px;">Rate your study session with ${sanitize(partnerName)} (optional). This builds their ★ rating &amp; sessions helped count.</p>
+          <div id="rating-stars" style="display:flex;justify-content:center;gap:8px;margin-bottom:20px;font-size:28px;cursor:pointer;">
+            ${[1,2,3,4,5].map(n => `<span data-rating="${n}" onclick="selectRating(${n})" style="opacity:0.35;transition:opacity 0.15s;">★</span>`).join("")}
+          </div>
+          <div style="display:flex;gap:10px;justify-content:center;">
+            <button id="complete-with-rating" class="inai-btn inai-btn-primary" style="padding:10px 20px;font-size:13px;">Complete Session</button>
+            <button id="complete-skip-rating" class="inai-btn inai-btn-outline" style="padding:10px 20px;font-size:13px;">Skip Rating</button>
+          </div>
+        </div>`;
+      document.body.appendChild(overlay);
+      let selectedRating = 0;
+      window.selectRating = (n) => {
+        selectedRating = n;
+        overlay.querySelectorAll("#rating-stars span").forEach((s, i) => {
+          s.style.opacity = i < n ? "1" : "0.35";
+          s.style.color = i < n ? "var(--gold)" : "inherit";
+        });
+      };
+      overlay.querySelector("#complete-with-rating").onclick = async () => {
+        overlay.remove();
+        const result = await completeSession(sessionId, selectedRating || undefined);
+        if (result.success) {
+          showToast("Session marked complete! Both of you earned +1 sessions helped.", "success");
+          await initData();
+          loadSessions(getSession());
+        } else {
+          showToast(result.message || "Failed to complete session.", "error");
+        }
+      };
+      overlay.querySelector("#complete-skip-rating").onclick = () => {
+        overlay.remove();
+        completeSession(sessionId).then(result => {
+          if (result.success) {
+            showToast("Session marked complete!", "success");
+            initData().then(() => loadSessions(getSession()));
+          } else {
+            showToast(result.message || "Failed.", "error");
+          }
+        });
+      };
+    }
+  </script>
+</body>
+</html>

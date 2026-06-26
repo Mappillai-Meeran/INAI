@@ -9,6 +9,7 @@
     href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700;800&family=DM+Sans:wght@400;500;600&display=swap"
     rel="stylesheet" />
   <link rel="stylesheet" href="css/style.css" />
+  <link rel="icon" type="image/png" href="assets/favicon-bg-removed.png" />
   <style>
     .radar-wrapper {
       display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -53,9 +54,11 @@
 
     document.addEventListener("DOMContentLoaded", async () => {
       showLoader();
-      await initData();
-      hideLoader();
-      injectBaseStyles();
+      try {
+        await initData();
+      } finally {
+        hideLoader();
+      }
       const user = requireLogin();
       if (!user) return;
 
@@ -134,6 +137,13 @@
               <label style="font-size:11px;color:var(--muted);font-weight:600;
                 letter-spacing:0.5px;display:flex;align-items:center;gap:8px;
                 cursor:pointer;margin-bottom:5px;">
+                <input type="checkbox" id="filter-gender" onchange="applyFilters()" checked
+                  style="accent-color:var(--violet);width:14px;height:14px;">
+                Same gender only
+              </label>
+              <label style="font-size:11px;color:var(--muted);font-weight:600;
+                letter-spacing:0.5px;display:flex;align-items:center;gap:8px;
+                cursor:pointer;margin-bottom:5px;">
                 <input type="checkbox" id="filter-free" onchange="applyFilters()"
                   style="accent-color:var(--violet);width:14px;height:14px;">
                 Free Now only
@@ -156,7 +166,7 @@
     </div>`;
 
       loadQuickMatches(user);
-      loadPrefMatches(user);
+      loadPrefMatches(user, { sameGenderOnly: true });
     });
 
     let currentMode = "quick";
@@ -184,40 +194,48 @@
 
     function loadQuickMatches(user) {
       const container = document.getElementById("quick-results");
-      container.innerHTML = renderRadar(user);
-      
-      setTimeout(() => {
-        const matches = getQuickMatches(user);
-        if (!matches.length) {
-          container.innerHTML = `<div class="inai-empty">
-        <div class="inai-empty-icon">⚡</div>
-        <p>No students found nearby right now.</p></div>`;
-          return;
-        }
-        container.innerHTML = matches.map(m => renderMatchCard(m, user, "quick")).join("");
-      }, 1200);
+      if (typeof isBackendDown === "function" && isBackendDown()) {
+        container.innerHTML = `<div class="inai-empty" style="text-align:center; padding:40px 20px; border: 1px dashed var(--red); background: rgba(239, 68, 68, 0.05); border-radius: 12px;">
+          <div style="color:var(--red); font-size:32px; margin-bottom:12px;">\u{26A0}\u{FE0F}</div>
+          <p style="color:var(--red); font-weight:700;">Connection Offline</p>
+          <p style="color:var(--muted); font-size:12px; margin-top:4px;">Unable to load matches. Please check if the backend is running.</p></div>`;
+        return;
+      }
+      const matches = getQuickMatches(user);
+      if (!matches.length) {
+        container.innerHTML = `<div class="inai-empty">
+      <div class="inai-empty-icon">\u{26A1}</div>
+      <p>No students found nearby right now.</p></div>`;
+        return;
+      }
+      container.innerHTML = matches.map((m, i) => renderMatchCard(m, user, "quick", i * 0.06)).join("");
     }
 
     function loadPrefMatches(user, filters = {}) {
       const container = document.getElementById("pref-results");
       const countEl = document.getElementById("pref-count");
-      container.innerHTML = renderRadar(user);
       if (countEl) countEl.style.display = 'none';
 
-      setTimeout(() => {
-        const matches = getPreferenceMatches(user, filters);
-        if (countEl) {
-          countEl.textContent = `${matches.length} student${matches.length !== 1 ? "s" : ""} found`;
-          countEl.style.display = 'block';
-        }
-        if (!matches.length) {
-          container.innerHTML = `<div class="inai-empty">
-        <div class="inai-empty-icon">🎯</div>
-        <p>No matches for these filters. Try adjusting them.</p></div>`;
-          return;
-        }
-        container.innerHTML = matches.map(m => renderMatchCard(m, user, "preference")).join("");
-      }, 1200);
+      if (typeof isBackendDown === "function" && isBackendDown()) {
+        container.innerHTML = `<div class="inai-empty" style="text-align:center; padding:40px 20px; border: 1px dashed var(--red); background: rgba(239, 68, 68, 0.05); border-radius: 12px;">
+          <div style="color:var(--red); font-size:32px; margin-bottom:12px;">\u{26A0}\u{FE0F}</div>
+          <p style="color:var(--red); font-weight:700;">Connection Offline</p>
+          <p style="color:var(--muted); font-size:12px; margin-top:4px;">Unable to load matches. Please check if the backend is running.</p></div>`;
+        return;
+      }
+
+      const matches = getPreferenceMatches(user, filters);
+      if (countEl) {
+        countEl.textContent = `${matches.length} student${matches.length !== 1 ? "s" : ""} found`;
+        countEl.style.display = 'block';
+      }
+      if (!matches.length) {
+        container.innerHTML = `<div class="inai-empty">
+      <div class="inai-empty-icon">\u{1F3AF}</div>
+      <p>No matches for these filters. Try adjusting them.</p></div>`;
+        return;
+      }
+      container.innerHTML = matches.map((m, i) => renderMatchCard(m, user, "preference", i * 0.06)).join("");
     }
 
     let filterTimeout;
@@ -229,7 +247,8 @@
         const minScore = parseInt(document.getElementById("filter-score")?.value || "0");
         const freeOnly = document.getElementById("filter-free")?.checked || false;
         const sameBlock = document.getElementById("filter-block")?.checked || false;
-        loadPrefMatches(user, { subject, minScore, freeOnly, sameBlock });
+        const sameGenderOnly = document.getElementById("filter-gender")?.checked ?? true;
+        loadPrefMatches(user, { subject, minScore, freeOnly, sameBlock, sameGenderOnly });
       }, 500);
     }
   </script>
