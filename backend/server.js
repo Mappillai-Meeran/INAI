@@ -7,8 +7,28 @@ const cors = require('cors');
 
 const app = express();
 dns.setServers(['8.8.8.8', '8.8.4.4']);
-// Allow requests from the frontend (which is usually running on localhost or 127.0.0.1)
-app.use(cors());
+
+// Configure allowed origins for CORS (Vercel domains and local dev)
+const allowedOrigins = [
+  "https://inai-weld.vercel.app",
+  "http://localhost:3000",
+  "http://localhost:5000",
+  "http://127.0.0.1:3000",
+  "http://127.0.0.1:5000"
+];
+
+app.use(cors({
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl) or matching allowed list or Vercel subdomains
+    if (!origin || allowedOrigins.includes(origin) || origin.endsWith('.vercel.app')) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true
+}));
+
 app.use(express.json());
 
 // MongoDB Connection
