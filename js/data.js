@@ -5,7 +5,7 @@
 
 const API_BASE = (window.location.hostname && (window.location.hostname.includes("localhost") || window.location.hostname.includes("127.0.0.1") || window.location.protocol === "file:"))
   ? `http://localhost:5000/api`
-  : `https://inai-58qr.onrender.com/api`;
+  : `https://inai-backend-8b08.onrender.com/api`;
 let USERS_CACHE = [];
 let REQUESTS_CACHE = [];
 let SESSIONS_CACHE = [];
